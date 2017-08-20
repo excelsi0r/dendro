@@ -44,8 +44,18 @@ describe('/interactions/:project/data/:filepath?register_interaction', function 
 
     it('[JSON] should delete all interactions if the user is a Dendro admin', function (done)
     {
-        //TODO
-        done();
+        userUtils.loginUser('admin', 'adminteste123', function (err, agent) {
+            async.map(interactions, function(interaction,callback){
+                interactionUtils.deletesAllInteractions(false, publicProjectFolderUrl, publicProject.handle, interaction, agent, (err, res) => {
+                    res.should.have.status(200);
+                    JSON.parse(res.text).message.should.equal("Method accessible only via API. Please add the \"Accept : application/json\" header to the HTTP request.");
+                    callback(null, res.text);
+                });
+            }, function(err, results){
+                console.log("Results " + JSON.stringify(results));
+                done(err);
+            });
+        });
     });
 
     it('[JSON] should register an interaction of each type for the user ' + demouser1.username, function (done)
