@@ -21,16 +21,27 @@ const publicProjectFolderUrl = "/project/"+ publicProject.handle +"/data"+folder
 const nonExistentFolderUrl = "/project/"+ publicProject.handle +"/data"+folder.pathInProject+"/NON_EXISTENT_URL";
 
 const interactionUtils = require(Pathfinder.absPathInTestsFolder("utils/interactions/interactionsUtils"));
+const appUtils = require(Pathfinder.absPathInTestsFolder("utils/app/appUtils.js"));
 const userUtils = require(Pathfinder.absPathInTestsFolder("utils/user/userUtils"));
+const createFoldersUnit = appUtils.requireUncached(Pathfinder.absPathInTestsFolder("units/folders/createFolders.Unit.js"));
 
 describe('/interactions/:project/data/:filepath?register_interaction', function ()
 {
+
+    before(function (done) {
+        this.timeout(Config.testsTimeout);
+        createFoldersUnit.setup(function (err, results) {
+            should.equal(err, null);
+            done();
+        });
+    });
+
     it('[HTML] should not register an interaction if Accept "application/json" header is absent', function (done)
     {
         userUtils.loginUser('demouser1', 'demouserpassword2015', function (err, agent) {
             async.map(interactions, function(interaction,callback){
                 interactionUtils.recordInteraction(false, publicProjectFolderUrl, publicProject.handle, interaction, agent, (err, res) => {
-                    res.should.have.status(405);
+                    res.should.have.status(404);
                 JSON.parse(res.text).result.should.equal("error");
                 JSON.parse(res.text).message.should.equal("Method accessible only via API. Please add the \"Accept : application/json\" header to the HTTP request.");
                 callback(null, res.text);

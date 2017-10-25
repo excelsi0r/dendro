@@ -17,6 +17,10 @@ global.tests = {};
 require(Pathfinder.absPathInTestsFolder("/init/loadOntologiesCache.Test.js"));
 
 require(Pathfinder.absPathInTestsFolder("routes/project/public_project/__administer/routes.project.publicProject.__administerTest.js"));
+
+require(Pathfinder.absPathInTestsFolder("/routes/interactions/all/route.interactions.all.Test.js"));
+
+require(Pathfinder.absPathInTestsFolder("/routes/interactions/delete_all/route.interactions.deleteAll.Test.js"));
 return;
 
 //PUBLIC PROJECT FOLDER LEVEL CALCULATE CKAN REPOSITORY DIFFS
