@@ -50,7 +50,7 @@ Post.prototype.getComments = function (cb) {
         "} \n" +
         "ORDER BY ASC(?date) \n";
 
-    db.connection.execute(query,
+    db.connection.executeViaJDBC(query,
         DbConnection.pushLimitsArguments([
             {
                 type : Elements.types.resourceNoEscape,
@@ -64,7 +64,7 @@ Post.prototype.getComments = function (cb) {
         function(err, results) {
             if(!err)
             {
-                async.map(results, function(commentInfo, callback){
+                async.mapSeries(results, function(commentInfo, callback){
                     Comment.findByUri(commentInfo.commentURI, function(err, comment)
                     {
                         callback(err,comment);
@@ -93,7 +93,7 @@ Post.prototype.getNumLikes = function (cb) {
         "?likeURI ddr:userWhoLiked ?userURI . \n" +
         "} \n";
 
-    db.connection.execute(query,
+    db.connection.executeViaJDBC(query,
         DbConnection.pushLimitsArguments([
             {
                 type : Elements.types.resourceNoEscape,
@@ -157,7 +157,7 @@ Post.prototype.getShares = function (cb) {
         "?shareURI ddr:postURI [1]. \n" +
         "} \n";
 
-    db.connection.execute(query,
+    db.connection.executeViaJDBC(query,
         DbConnection.pushLimitsArguments([
             {
                 type : Elements.types.resourceNoEscape,
@@ -171,7 +171,7 @@ Post.prototype.getShares = function (cb) {
         function(err, results) {
             if(!err)
             {
-                async.map(results, function(shareObject, callback){
+                async.mapSeries(results, function(shareObject, callback){
                     //Share.findByUri(shareObject.shareURI, function(err, share)
                     const Resource = require(Pathfinder.absPathInSrcFolder("/models/resource.js")).Resource;
                     Resource.findByUri(shareObject.shareURI, function(err, share)
@@ -204,7 +204,7 @@ Post.prototype.getOwnerProject = function(callback)
         "   ?uri rdf:type ddr:Project \n" +
         "} ";
 
-    db.connection.execute(query,
+    db.connection.executeViaJDBC(query,
         [
             {
                 type: Elements.types.resourceNoEscape,

@@ -20,19 +20,10 @@ const demouser2 = require(Pathfinder.absPathInTestsFolder("mockdata/users/demous
 const demouser3 = require(Pathfinder.absPathInTestsFolder("mockdata/users/demouser3.js"));
 
 const privateProject = require(Pathfinder.absPathInTestsFolder("mockdata/projects/private_project.js"));
-const invalidProject = require(Pathfinder.absPathInTestsFolder("mockdata/projects/invalidProject.js"));
 
-const folder = require(Pathfinder.absPathInTestsFolder("mockdata/folders/folder.js"));
 const testFolder1 = require(Pathfinder.absPathInTestsFolder("mockdata/folders/testFolder1.js"));
-const notFoundFolder = require(Pathfinder.absPathInTestsFolder("mockdata/folders/notFoundFolder.js"));
-const folderForDemouser2 = require(Pathfinder.absPathInTestsFolder("mockdata/folders/folderDemoUser2"));
 const createFilesUnit = appUtils.requireUncached(Pathfinder.absPathInTestsFolder("units/files/createFiles.Unit.js"));
-const db = appUtils.requireUncached(Pathfinder.absPathInTestsFolder("utils/db/db.Test.js"));
 
-const csvMockFile = require(Pathfinder.absPathInTestsFolder("mockdata/files/csvMockFile.js"));
-const docxMockFile = require(Pathfinder.absPathInTestsFolder("mockdata/files/docxMockFile.js"));
-const xlsxMockFile = require(Pathfinder.absPathInTestsFolder("mockdata/files/xlsxMockFile.js"));
-const zipMockFile = require(Pathfinder.absPathInTestsFolder("mockdata/files/zipMockFile.js"));
 const txtMockFile = require(Pathfinder.absPathInTestsFolder("mockdata/files/txtMockFile.js"));
 
 
@@ -123,7 +114,7 @@ describe("Private project testFolder1 ?rename", function () {
         it("Should give an error if an invalid name is specified for the file, even if the user is logged in as a creator or collaborator on the project", function (done)
         {
             userUtils.loginUser(demouser1.username, demouser1.password, function (err, agent) {
-                async.map(allFiles, function(file, callback){
+                async.mapSeries(allFiles, function(file, callback){
                     const newName = "123987621873512)(/&(/#%#(/)=)()/&%$#";
                     fileUtils.renameFile(agent, privateProject.handle, testFolder1.name, file.name, newName,  function (err, res) {
                         res.statusCode.should.equal(400);
@@ -138,7 +129,7 @@ describe("Private project testFolder1 ?rename", function () {
         it("Should be unable to find the file if we try to rename a file that does not exist, even if the user is logged in as a creator or collaborator on the project", function (done)
         {
             userUtils.loginUser(demouser2.username, demouser2.password, function (err, agent) {
-                async.map(allFiles, function(file, callback){
+                async.mapSeries(allFiles, function(file, callback){
                     const newName = "RenamedFile";
                     const inexistentFileName = "A_FILE_THAT_DOES_NOT_EXIST";
                     fileUtils.renameFile(agent, privateProject.handle, testFolder1.name, inexistentFileName, newName,  function (err, res) {
@@ -160,7 +151,7 @@ describe("Private project testFolder1 ?rename", function () {
         it("Should give an error if we try to rename a project instead of a file, even if the user is logged in as a creator or collaborator on the project", function (done)
         {
             userUtils.loginUser(demouser2.username, demouser2.password, function (err, agent) {
-                async.map(allFiles, function(file, callback){
+                async.mapSeries(allFiles, function(file, callback){
                     const newName = "RenamedFile";
                     fileUtils.renameProject(true, agent, privateProject.handle, newName,  function (err, res) {
                         res.statusCode.should.equal(404);
@@ -193,7 +184,7 @@ describe("Private project testFolder1 ?rename", function () {
 
         it("Should rename files with success if the user is logged in as demouser1(the creator of the project)", function (done) {
             userUtils.loginUser(demouser1.username, demouser1.password, function (err, agent) {
-                async.map(allFiles, function(file, callback){
+                async.mapSeries(allFiles, function(file, callback){
                     const newName = "RenamedFile";
                     fileUtils.renameFile(agent, privateProject.handle, testFolder1.name, file.name, newName,  function (err, res) {
                         res.statusCode.should.equal(200);
@@ -240,7 +231,7 @@ describe("Private project testFolder1 ?rename", function () {
 
         it("Should rename all files with success if the user is logged in as demouser2(a collaborator of the project)", function (done) {
             userUtils.loginUser(demouser2.username, demouser2.password, function (err, agent) {
-                async.map(allFiles, function(file, callback){
+                async.mapSeries(allFiles, function(file, callback){
                     const newName = "RenamedFile";
                     const newNameWithExtension = newName + "." + file.extension;
 

@@ -19,31 +19,22 @@ const demouser2 = require(Pathfinder.absPathInTestsFolder("mockdata/users/demous
 const demouser3 = require(Pathfinder.absPathInTestsFolder("mockdata/users/demouser3.js"));
 
 const privateProject = require(Pathfinder.absPathInTestsFolder("mockdata/projects/private_project.js"));
-const invalidProject = require(Pathfinder.absPathInTestsFolder("mockdata/projects/invalidProject.js"));
 
-const folder = require(Pathfinder.absPathInTestsFolder("mockdata/folders/folder.js"));
 const testFolder1 = require(Pathfinder.absPathInTestsFolder("mockdata/folders/testFolder1.js"));
-const notFoundFolder = require(Pathfinder.absPathInTestsFolder("mockdata/folders/notFoundFolder.js"));
-const folderForDemouser2 = require(Pathfinder.absPathInTestsFolder("mockdata/folders/folderDemoUser2"));
 const createFilesUnit = appUtils.requireUncached(Pathfinder.absPathInTestsFolder("units/files/createFiles.Unit.js"));
-const db = appUtils.requireUncached(Pathfinder.absPathInTestsFolder("utils/db/db.Test.js"));
 
-const csvMockFile = require(Pathfinder.absPathInTestsFolder("mockdata/files/csvMockFile.js"));
-const docxMockFile = require(Pathfinder.absPathInTestsFolder("mockdata/files/docxMockFile.js"));
-const xlsxMockFile = require(Pathfinder.absPathInTestsFolder("mockdata/files/xlsxMockFile.js"));
-const zipMockFile = require(Pathfinder.absPathInTestsFolder("mockdata/files/zipMockFile.js"));
-const txtMockFile = require(Pathfinder.absPathInTestsFolder("mockdata/files/txtMockFile.js"));
 
 const allFiles = createFilesUnit.allFiles;
 
 const cutFilesFolderName = "cutFiles";
-const filesToMove = [txtMockFile, docxMockFile];
+const filesToMove = JSON.parse(JSON.stringify(allFiles)).pop();
 
 describe("[File Cut / Move] [Private project] cutFiles ?paste", function () {
     describe("[Invalid Cases] /project/" + privateProject.handle + "/data/cutFiles?cut", function ()
     {
+        this.timeout(3*Config.testsTimeOut);
+
         beforeEach(function (done) {
-            this.timeout(2*Config.testsTimeOut);
             createFilesUnit.setup(function (err, results) {
                 should.equal(err, null);
                 done();
@@ -52,7 +43,6 @@ describe("[File Cut / Move] [Private project] cutFiles ?paste", function () {
 
         afterEach(function (done) {
             //destroy graphs
-            this.timeout(2*Config.testsTimeout);
             appUtils.clearAppState(function (err, data) {
                 should.equal(err, null);
                 done();
@@ -83,7 +73,7 @@ describe("[File Cut / Move] [Private project] cutFiles ?paste", function () {
                             should.equal(err, null);
 
                             JSON.parse(res.text).should.be.instanceof(Array);
-                            should.equal(folderUtils.responseContainsAllMockFiles(res, filesToMove), false);
+                            JSON.parse(res.text).length.should.equal(0);
 
                             folderUtils.moveFilesIntoFolder(false, agent, urisOfFilesToMove, destinationFolderUri, function(err, res){
                                 res.statusCode.should.equal(400);
@@ -119,7 +109,7 @@ describe("[File Cut / Move] [Private project] cutFiles ?paste", function () {
                             should.equal(err, null);
 
                             JSON.parse(res.text).should.be.instanceof(Array);
-                            should.equal(folderUtils.responseContainsAllMockFiles(res, filesToMove), false);
+                            JSON.parse(res.text).length.should.equal(0);
 
                             userUtils.logoutUser(agent, function(err, agent){
                                 res.statusCode.should.equal(200);
@@ -160,7 +150,7 @@ describe("[File Cut / Move] [Private project] cutFiles ?paste", function () {
                             should.equal(err, null);
 
                             JSON.parse(res.text).should.be.instanceof(Array);
-                            should.equal(folderUtils.responseContainsAllMockFiles(res, filesToMove), false);
+                            JSON.parse(res.text).length.should.equal(0);
 
                             //here we introduce the error, an identifier that does not exist
                             urisOfFilesToMove[0] = "/r/file/00000000-0000-0000-0000-000000000000";
@@ -225,7 +215,7 @@ describe("[File Cut / Move] [Private project] cutFiles ?paste", function () {
                             should.equal(err, null);
 
                             JSON.parse(res.text).should.be.instanceof(Array);
-                            should.equal(folderUtils.responseContainsAllMockFiles(res, filesToMove), false);
+                            JSON.parse(res.text).length.should.equal(0);
 
                             userUtils.logoutUser(agent, function (err, agent) {
                                 res.statusCode.should.equal(200);
@@ -270,7 +260,7 @@ describe("[File Cut / Move] [Private project] cutFiles ?paste", function () {
                             should.equal(err, null);
 
                             JSON.parse(res.text).should.be.instanceof(Array);
-                            should.equal(folderUtils.responseContainsAllMockFiles(res, filesToMove), false);
+                            JSON.parse(res.text).length.should.equal(0);
 
 
                             //here we introduce the error. We log in with demouser3 and
@@ -338,7 +328,7 @@ describe("[File Cut / Move] [Private project] cutFiles ?paste", function () {
                             should.equal(err, null);
 
                             JSON.parse(res.text).should.be.instanceof(Array);
-                            should.equal(folderUtils.responseContainsAllMockFiles(res, filesToMove), false);
+                            JSON.parse(res.text).length.should.equal(0);
 
                             folderUtils.createFolderInProject(true, agent, cutFilesFolderName, cutFilesFolderName, privateProject.handle, function(err, res){
                                 res.statusCode.should.equal(200);
@@ -360,8 +350,8 @@ describe("[File Cut / Move] [Private project] cutFiles ?paste", function () {
     });
 
     describe("[Valid Cases] /project/" + privateProject.handle + "/data/testFolder1/:filename?cut", function () {
+        this.timeout(2*Config.testsTimeout);
         beforeEach(function (done) {
-            this.timeout(Config.testsTimeout);
             createFilesUnit.setup(function (err, results) {
                 should.equal(err, null);
                 done();
@@ -391,7 +381,7 @@ describe("[File Cut / Move] [Private project] cutFiles ?paste", function () {
                             should.equal(err, null);
 
                             JSON.parse(res.text).should.be.instanceof(Array);
-                            should.equal(folderUtils.responseContainsAllMockFiles(res, filesToMove), false);
+                            JSON.parse(res.text).length.should.equal(0);
 
                             folderUtils.moveFilesIntoFolder(true, agent, urisOfFilesToMove, destinationFolderUri, function(err, res){
                                 res.statusCode.should.equal(200);
@@ -442,7 +432,7 @@ describe("[File Cut / Move] [Private project] cutFiles ?paste", function () {
                             should.equal(err, null);
 
                             JSON.parse(res.text).should.be.instanceof(Array);
-                            should.equal(folderUtils.responseContainsAllMockFiles(res, filesToMove), false);
+                            JSON.parse(res.text).length.should.equal(0);
 
                             folderUtils.moveFilesIntoFolder(true, agent, urisOfFilesToMove, destinationFolderUri, function(err, res){
                                 res.statusCode.should.equal(200);
@@ -472,7 +462,6 @@ describe("[File Cut / Move] [Private project] cutFiles ?paste", function () {
 
         afterEach(function (done) {
             //destroy graphs
-            this.timeout(Config.testsTimeout);
             appUtils.clearAppState(function (err, data) {
                 should.equal(err, null);
                 done();

@@ -35,7 +35,7 @@ Change.findByAssociatedRevision = function(revisionUri, callback)
         "?uri ddr:pertainsTo [1] . \n" +
         "} \n";
 
-    db.connection.execute(query,
+    db.connection.executeViaJDBC(query,
         [
             {
                 type : Elements.types.resourceNoEscape,
@@ -60,7 +60,7 @@ Change.findByAssociatedRevision = function(revisionUri, callback)
                     });
                 };
 
-                async.map(results, fetchFullChange, function(err, fullChanges){
+                async.mapSeries(results, fetchFullChange, function(err, fullChanges){
                     if(isNull(err))
                     {
                         return callback(null, fullChanges);

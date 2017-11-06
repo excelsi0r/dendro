@@ -1,6 +1,7 @@
 const util = require("util");
 const async = require("async");
 const path = require("path");
+const _ = require("underscore");
 const Pathfinder = global.Pathfinder;
 
 const isNull = require(Pathfinder.absPathInSrcFolder("/utils/null.js")).isNull;
@@ -15,14 +16,15 @@ const OntologiesCache = function(options)
     self.port = options.port;
     self.host = options.host;
     self.database = options.database;
-    self.collection = options.collection;
+    self.ontologies_collection = (options.ontologies_collection)? options.ontologies_collection : "ontologies";
+    self.elements_collection = (options.elements_collection)? options.elements_collection : "elements";
 };
 
 OntologiesCache.prototype.open = function(callback) {
     const self = this;
     if(!isNull(self.client))
     {
-        return callback(1, "Ontologies cache connection is already open.");
+        return callback(null, self.client);
     }
     else
     {
@@ -45,30 +47,31 @@ OntologiesCache.prototype.close = function() {
     self.client.close();
 };
 
-OntologiesCache.prototype.get = function(callback)
+OntologiesCache.prototype._putObjects = function(newObjects, collectionName, callback)
 {
     let self = this;
 
-    self.open(function(err, db)
-    {
+    self.open(function(err, db){
+
         if(isNull(err))
         {
-            const cursor = db.collection(self.collection)
-                .find({},{"_id": 0});
-
-            const allOntologies = {};
-
-            cursor.toArray(function (err, ontologies)
-            {
-                for(let i = 0; i < ontologies.length; i++)
-                {
-                    let ontology = ontologies[i];
-                    allOntologies[ontology.prefix] = ontology;
-                }
-
-                db.close();
-
-                callback(err, allOntologies);
+            const prefixes = Object.keys(newObjects);
+            db.collection(collectionName,function(err, collection){
+                collection.remove({},function(err, removed){
+                    async.mapSeries(prefixes, function(prefix, callback)
+                    {
+                        let newObj = newObjects[prefix];
+                        db.collection(collectionName)
+                            .insert(
+                                newObj,
+                                function (err, result)
+                                {
+                                    callback(err, newObj);
+                                });
+                    }, function(err, results){
+                        callback(err, results);
+                    });
+                });
             });
         }
         else
@@ -80,30 +83,28 @@ OntologiesCache.prototype.get = function(callback)
     });
 };
 
-OntologiesCache.prototype.put = function(newOntologies, callback)
+OntologiesCache.prototype.getOntologies = function(callback)
 {
-    let self = this;
+    const self = this;
 
-    self.open(function(err, db){
-
+    self.open(function(err, db)
+    {
         if(isNull(err))
         {
-            const prefixes = Object.keys(newOntologies);
-            db.collection(self.collection,function(err, collection){
-                collection.remove({},function(err, removed){
-                    async.map(prefixes, function(prefix, callback)
-                    {
-                        let ontologyObj = newOntologies[prefix];
-                        db.collection(self.collection)
-                            .insert(
-                                ontologyObj,
-                                function (err, result)
-                                {
-                                    db.close();
-                                    callback(err, result);
-                                });
-                    }, callback);
-                });
+            const cursor = db.collection(self.ontologies_collection)
+                .find({},{"_id": 0});
+
+            const allObjects = {};
+
+            cursor.toArray(function (err, results)
+            {
+                for(let i = 0; i < results.length; i++)
+                {
+                    let result = results[i];
+                    allObjects[result.prefix] = result;
+                }
+
+                callback(err, allObjects);
             });
         }
         else
@@ -113,6 +114,58 @@ OntologiesCache.prototype.put = function(newOntologies, callback)
             callback(err);
         }
     });
+};
+
+OntologiesCache.prototype.getElements = function(callback)
+{
+    const self = this;
+
+    self.open(function(err, db)
+    {
+        if(isNull(err))
+        {
+            const cursor = db.collection(self.elements_collection)
+                .find({},{"_id": 0});
+
+            const allObjects = [];
+
+            const pushToObjectsArray = function(elementsByAPrefix)
+            {
+                _.each(elementsByAPrefix, function(object, key){
+                    allObjects.push(object);
+                });
+            };
+
+            cursor.toArray(function (err, results)
+            {
+                for(let i = 0; i < results.length; i++)
+                {
+                    let elementsByAPrefix = results[i];
+                    pushToObjectsArray(elementsByAPrefix);
+                }
+
+                callback(err, allObjects);
+            });
+        }
+        else
+        {
+            console.error("Error while connecting to mongodb database " + self.host + " " + self.port + " " + self.collection);
+            console.error(JSON.stringify(err));
+            callback(err);
+        }
+    });
+};
+
+OntologiesCache.prototype.putElements = function(newElements, callback)
+{
+    let self = this;
+    self._putObjects(newElements, self.elements_collection, callback);
+};
+
+OntologiesCache.prototype.putOntologies = function(newOntologies, callback)
+{
+    let self = this;
+    self._putObjects(newOntologies, self.ontologies_collection, callback);
 };
 
 module.exports.OntologiesCache = OntologiesCache;

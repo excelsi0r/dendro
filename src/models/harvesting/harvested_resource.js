@@ -132,7 +132,7 @@ HarvestedResource.prototype.save = function(indexConnection, callback) {
         "} \n" +
         "} \n";
 
-    db.connection.execute(
+    db.connection.executeViaJDBC(
         fullQueryString,
         argumentsArray,
         function(err, result)

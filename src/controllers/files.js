@@ -9,9 +9,9 @@ const Folder = require(Pathfinder.absPathInSrcFolder("/models/directory_structur
 const File = require(Pathfinder.absPathInSrcFolder("/models/directory_structure/file.js")).File;
 const Descriptor = require(Pathfinder.absPathInSrcFolder("/models/meta/descriptor.js")).Descriptor;
 const User = require(Pathfinder.absPathInSrcFolder("/models/user.js")).User;
-const UploadManager = require(Pathfinder.absPathInSrcFolder("/models/uploads/upload_manager.js")).UploadManager;
 const FileSystemPost = require(Pathfinder.absPathInSrcFolder("/models/social/fileSystemPost.js")).FileSystemPost;
 const Uploader = require(Pathfinder.absPathInSrcFolder("/utils/uploader.js")).Uploader;
+const Elements = require(Pathfinder.absPathInSrcFolder("/models/meta/elements.js")).Elements;
 
 const async = require("async");
 
@@ -95,15 +95,17 @@ exports.download = function(req, res){
                             res.end();
                         }
                     }
-                    else {
+                    else
+                    {
                         if (err === 404) {
                             const error = "There was already a prior attempt to delete this folder. The folder is now deleted but still appears in the file explorer due to a past error. Try deleting it again to fix the issue. " + requestedResourceURI;
                             console.error(error);
                             res.writeHead(404, error);
                             res.end();
                         }
-                        else {
-                            console.error("Unable to produce temporary file to download " + self.uri + " Error returned : " + writtenFilePath);
+                        else
+                        {
+                            console.error("Unable to produce temporary file to download " + self.uri + " Error returned : " + JSON.stringify(results));
                         }
 
                     }
@@ -482,7 +484,6 @@ exports.serve_base64 = function(req, res){
         {
             if(!isNull(ie))
             {
-                const path = require("path");
                 if(ie.isA(File))
                 {
                     File.findByUri(requestedResourceURI, function(err, file){
@@ -501,7 +502,13 @@ exports.serve_base64 = function(req, res){
 
                                         res.on("end", function(){
                                             console.log("close");
-                                            deleteTempFile(writtenFilePath);
+                                            File.deleteOnLocalFileSystem(writtenFilePath, function(err, stdout, stderr){
+                                                if(!isNull(err)){
+                                                    console.error(err);
+                                                    console.error(stdout);
+                                                    console.error(stderr);
+                                                }
+                                            });
                                         });
                                         const base64 = require('base64-stream');
 
@@ -785,7 +792,7 @@ exports.upload = function(req, res)
 
         const calculateTotalSizeOfFiles = function(files, callback)
         {
-            async.map(files, function(file){
+            async.mapSeries(files, function(file){
                 fs.stat(file.path, function(err, stats){
                     callback(err, stats.size);
                 });
@@ -912,7 +919,7 @@ exports.upload = function(req, res)
                                                                         const msg = "Error [" + err + "] reindexing file [" + newFile.uri + "]in GridFS :" + newFile;
                                                                         return callback(500, {
                                                                             result: "error",
-                                                                            message: "Unable to save files after buffering: " + (result.message)? result.message : JSON.stringify(result),
+                                                                            message: "Unable to save files after buffering: " + JSON.stringify(newFile),
                                                                             files: files,
                                                                             errors: newFile
                                                                         });
@@ -932,7 +939,7 @@ exports.upload = function(req, res)
                                                         }, function(err, results){
                                                             if(isNull(err))
                                                             {
-                                                                async.map(results, function (result, callback) {
+                                                                async.mapSeries(results, function (result, callback) {
                                                                     if(result.result === "success")
                                                                     {
                                                                         File.findByUri(result.uri, function (error, file) {

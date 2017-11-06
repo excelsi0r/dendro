@@ -61,7 +61,7 @@ InformationElement.prototype.getParent = function(callback)
         " } \n" +
         "} ";
 
-    db.connection.execute(query,
+    db.connection.executeViaJDBC(query,
         [
             {
                 type: Elements.types.resourceNoEscape,
@@ -144,7 +144,7 @@ InformationElement.prototype.getAllParentsUntilProject = function(callback)
         "   }\n" +
         "}\n ";
 
-    db.connection.execute(query,
+    db.connection.executeViaJDBC(query,
         [
             {
                 type: Elements.types.resourceNoEscape,
@@ -162,7 +162,7 @@ InformationElement.prototype.getAllParentsUntilProject = function(callback)
                 {
                     const async = require("async");
                     const Folder = require(Pathfinder.absPathInSrcFolder("/models/directory_structure/folder.js")).Folder;
-                    async.map(result, function(result, callback){
+                    async.mapSeries(result, function(result, callback){
                         Folder.findByUri(result.uri, function(err, parentFolder){
                             return callback(err,parentFolder);
                         });
@@ -195,11 +195,13 @@ InformationElement.prototype.getOwnerProject = function(callback)
         "FROM [0] \n" +
         "WHERE \n" +
         "{ \n" +
-        "   [1] nie:isLogicalPartOf+ ?uri. \n" +
-        "   ?uri rdf:type ddr:Project \n" +
+        "   [1] nie:isLogicalPartOf+ ?uri \n" +
+        "   FILTER EXISTS { \n" +
+        "       ?uri rdf:type ddr:Project \n" +
+        "   }\n"+
         "} ";
 
-    db.connection.execute(query,
+    db.connection.executeViaJDBC(query,
         [
             {
                 type: Elements.types.resourceNoEscape,
@@ -237,28 +239,24 @@ InformationElement.prototype.rename = function(newTitle, callback)
 {
     const self = this;
 
-    //an update is made through a delete followed by an insert
-    // http://www.w3.org/TR/2013/REC-sparql11-update-20130321/#insertData
-
-    //TODO CACHE DONE
     const query =
-        "DELETE DATA " +
-        "{ " +
-        "GRAPH [0] " +
-        "{ " +
-        "[1] nie:title ?title . " +
-        "} " +
-        "}; " +
+        "DELETE DATA \n" +
+        "{ \n" +
+        "GRAPH [0] \n" +
+        "   { \n" +
+        "       [1] nie:title ?title . " +
+        "   } \n" +
+        "}; \n" +
 
-        "INSERT DATA " +
-        "{ " +
-        "GRAPH [0] " +
-        "{ " +
-        "[1] nie:title [2] " +
-        "} " +
-        "}; ";
+        "INSERT DATA \n" +
+        "{ \n" +
+        "   GRAPH [0] \n" +
+        "   { " +
+        "       [1] nie:title [2] \n" +
+        "   } \n" +
+        "}; \n";
 
-    db.connection.execute(query,
+    db.connection.executeViaJDBC(query,
         [
             {
                 type: Elements.types.resourceNoEscape,
@@ -288,26 +286,34 @@ InformationElement.prototype.moveToFolder = function(newParentFolder, callback)
     const oldParent = self.nie.isLogicalPartOf;
     const newParent = newParentFolder.uri;
 
+    // "WITH GRAPH [0] \n" +
+    // "DELETE \n" +
+    // "{ \n" +
+    // deleteString + " \n" +
+    // "} \n" +
+    // "WHERE \n" +
+    // "{ \n" +
+    // deleteString + " \n" +
+    // "} \n" +
+    // "INSERT DATA\n" +
+    // "{ \n" +
+    // insertString + " \n" +
+    // "} \n";
+
     const query =
-        "DELETE DATA \n" +
+        "WITH GRAPH [0] \n" +
+        "DELETE \n" +
         "{ \n" +
-        "   GRAPH [0] \n" +
-        "   { \n" +
-        "       [1] nie:hasLogicalPart [2]. \n" +
-        "       [2] nie:isLogicalPartOf [1]. \n" +
-        "   } \n" +
-        "}; \n" +
-
-        "INSERT DATA \n" +
+        "   [1] nie:hasLogicalPart [2]. \n" +
+        "   [2] nie:isLogicalPartOf [1] \n" +
+        "} \n" +
+        "INSERT \n" +
         "{ \n" +
-        "   GRAPH [0] \n" +
-        "   { \n" +
-        "       [3] nie:hasLogicalPart [2]. \n" +
-        "       [2] nie:isLogicalPartOf [3]. \n" +
-        "   } " +
-        "}; \n";
+        "   [3] nie:hasLogicalPart [2]. \n" +
+        "   [2] nie:isLogicalPartOf [3] \n" +
+        "} \n";
 
-    db.connection.execute(query,
+    db.connection.executeViaJDBC(query,
         [
             {
                 type: Elements.types.resourceNoEscape,
@@ -349,7 +355,7 @@ InformationElement.prototype.moveToFolder = function(newParentFolder, callback)
             {
                 return callback(err, result);
             }
-        });
+        }, null, null, null, true);
 };
 
 InformationElement.prototype.unlinkFromParent = function(callback)
@@ -564,7 +570,7 @@ InformationElement.prototype.containedIn = function(parentResource, callback, cu
     {
         const graphUri = (!isNull(customGraphUri) && typeof customGraphUri === "string") ? customGraphUri : db.graphUri;
 
-        db.connection.execute(
+        db.connection.executeViaJDBC(
             "WITH [0]\n"+
             "ASK \n" +
             "WHERE \n" +
@@ -592,7 +598,21 @@ InformationElement.prototype.containedIn = function(parentResource, callback, cu
             function(err, result) {
                 if(isNull(err))
                 {
-                    return callback(null, result);
+                    if(result instanceof Array)
+                    {
+                        if(result.length === 0)
+                        {
+                            return callback(null, false);
+                        }
+                        else
+                        {
+                            return callback(null, true);
+                        }
+                    }
+                    else
+                    {
+                        return callback(null, result);
+                    }
                 }
                 else
                 {

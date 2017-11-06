@@ -65,7 +65,7 @@ ArchivedResource.findByResourceAndVersionNumber = function(resourceUri, versionN
     {
         if(!isNull(versionNumber) && typeof versionNumber === 'number' && versionNumber%1 === 0)
         {
-            db.connection.execute(
+            db.connection.executeViaJDBC(
                 "SELECT ?archived_resource\n" +
                 "FROM [0]\n"+
                 "WHERE \n" +
@@ -80,11 +80,11 @@ ArchivedResource.findByResourceAndVersionNumber = function(resourceUri, versionN
                         value : graphUri
                     },
                     {
-                        type : Elements.ddr.isVersionOf.type,
+                        type : Elements.ontologies.ddr.isVersionOf.type,
                         value : resourceUri
                     },
                     {
-                        type : Elements.ddr.versionNumber.type,
+                        type : Elements.ontologies.ddr.versionNumber.type,
                         value : versionNumber
                     }
                 ],

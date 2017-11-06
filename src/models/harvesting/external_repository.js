@@ -48,7 +48,7 @@ ExternalRepository.findByCreator = function(creatorUri, callback)
         "} \n" +
         "} \n";
 
-    db.connection.execute(query,
+    db.connection.executeViaJDBC(query,
         [
             {
                 type : Elements.types.resourceNoEscape,
@@ -70,7 +70,7 @@ ExternalRepository.findByCreator = function(creatorUri, callback)
                         });
                     };
 
-                    async.map(rows, getExternalRepository, function(err, externalRepositories)
+                    async.mapSeries(rows, getExternalRepository, function(err, externalRepositories)
                     {
                         return callback(err, externalRepositories);
                     });

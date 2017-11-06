@@ -7,6 +7,8 @@ const isNull = require(Pathfinder.absPathInSrcFolder("utils/null.js")).isNull;
 const nodeCleanup = require("node-cleanup");
 const npid = require("npid");
 const async = require("async");
+const mkdirp = require("mkdirp");
+const path = require("path");
 
 const setupGracefulClose = function(app, server, callback)
 {
@@ -19,6 +21,19 @@ const setupGracefulClose = function(app, server, callback)
 
     app.freeResources = function(callback)
     {
+        if(Config.debug.active && Config.debug.memory.dump_snapshots)
+        {
+            Logger.log("info", "Dumping heap snapshot!");
+            const heapdump = require('heapdump');
+            const snapshotsFolder = Pathfinder.absPathInApp("profiling/snapshots");
+            const snapshotFile = path.join(snapshotsFolder, Date.now() + ".heapsnapshot");
+
+            mkdirp.sync(snapshotsFolder);
+            heapdump.writeSnapshot(snapshotFile, function(err, filename) {
+                Logger.log("info", "Dumped snapshot at "+snapshotFile+"!");
+            });
+        }
+
         const closeVirtuosoConnections = function(cb)
         {
             const Config = require(Pathfinder.absPathInSrcFolder("models/meta/config.js")).Config;
@@ -33,7 +48,7 @@ const setupGracefulClose = function(app, server, callback)
                 }
             }, Config.dbOperationTimeout);
 
-            async.map(Object.keys(Config.db), function(dbConfigKey, cb){
+            async.mapSeries(Object.keys(Config.db), function(dbConfigKey, cb){
                 const dbConfig = Config.db[dbConfigKey];
 
                 if(!isNull(dbConfig.connection) && dbConfig.connection instanceof DbConnection)
@@ -78,7 +93,7 @@ const setupGracefulClose = function(app, server, callback)
 
         const closeGridFSConnections = function(cb)
         {
-            async.map(global.gfs, function(gridFSConnection, cb){
+            async.mapSeries(global.gfs, function(gridFSConnection, cb){
                 if(global.gfs.hasOwnProperty(gridFSConnection))
                 {
                     global.gfs[gridFSConnection].connection.close(cb);
@@ -196,7 +211,7 @@ const setupGracefulClose = function(app, server, callback)
 
                 return false;
             }
-            else if(exitCode === 0)
+            else if(exitCode === 0 && !isNull(process.env.NODE_ENV) && process.env.NODE_ENV !== "test")
             {
                 process.exit(0);
             }
@@ -205,16 +220,19 @@ const setupGracefulClose = function(app, server, callback)
 
             Logger.log_boot_message("warning", "Signal " + signal + " received, with exit code "+exitCode+"!");
         });
+
+        if(process.env !== "test")
+        {
+            process.on('unhandledRejection', function(rejection){
+                console.error("Unknown error occurred!");
+                console.error(rejection.stack);
+
+                //we send SIGINT (like Ctrl+c) so that the graceful
+                // cleanup process function can be called (see setup_graceful_close.js)
+                process.kill(process.pid, "SIGINT");
+            });
+        }
     }
-
-    process.on('unhandledRejection', function(rejection){
-        console.error("Unknown error occurred!");
-        console.error(rejection.stack);
-
-        //we send SIGINT (like Ctrl+c) so that the graceful
-        // cleanup process function can be called (see setup_graceful_close.js)
-        process.kill(process.pid, "SIGINT");
-    });
 
     setupGracefulClose._handlers_are_installed = true;
 

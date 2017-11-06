@@ -183,7 +183,7 @@ File.deleteOnLocalFileSystem = function(absPathToFile, callback)
 
     if(isWin)
     {
-        command = `rd /s /q \""${absPathToFile}"\"`
+        command = `rd /s /q \""${absPathToFile}"\"`;
     }
     else
     {
@@ -216,7 +216,44 @@ File.prototype.save = function (callback, rename) {
         if(rename){
             const getParent = function(callback)
             {
-                self.getParent(callback);
+                let parentUri = self.nie.isLogicalPartOf;
+                const Folder = require(Pathfinder.absPathInSrcFolder("/models/directory_structure/folder.js")).Folder;
+                const Project = require(Pathfinder.absPathInSrcFolder("/models/project.js")).Project;
+
+                Folder.findByUri(parentUri, function (err, parentFolder) {
+                    if(isNull(err))
+                    {
+                        if(parentFolder instanceof Folder)
+                        {
+                            callback(err, parentFolder);
+                        }
+                        else
+                        {
+                            Project.findByUri(parentUri, function (err, parentProject) {
+                                if(isNull(err))
+                                {
+                                    if(parentProject instanceof Project)
+                                    {
+                                        callback(err, parentProject);
+                                    }
+                                    else
+                                    {
+                                        callback(true, "Error: Parent of :  " + self.uri + " is neither a folder nor project");
+                                    }
+
+                                }
+                                else
+                                {
+                                    callback(err, parentProject)
+                                }
+                            });
+                        }
+                    }
+                    else
+                    {
+                        callback(err, parentFolder);
+                    }
+                });
             };
 
             const getChildrenOfParent = function(parent, callback)
@@ -227,14 +264,16 @@ File.prototype.save = function (callback, rename) {
             const renameIfChildExistsWithSameName = function(children, callback)
             {
                 const childrenWithTheSameName = _.find(children, function(child){
-                    return child.nie.title === self.nie.title
+                    return child.nie.title === self.nie.title && child.uri !== self.uri && child.ddr.deleted !==true;
                 });
 
                 if(
-                    !isNull(childrenWithTheSameName) && childrenWithTheSameName.length > 0
+                    !isNull(childrenWithTheSameName) && Array.isArray(childrenWithTheSameName) && childrenWithTheSameName.length > 0 ||
+                    !isNull(childrenWithTheSameName) && childrenWithTheSameName instanceof Object
                 )
                 {
-                    self.nie.title = self.title + " (Copy created at " + new Date().toISOString() + ")";
+                    let fileNameData = self.nie.title.split(".");
+                    self.nie.title = fileNameData[0] + "_Copy_created_" + Date.now()+ "." + fileNameData[1];
                 }
 
                 callback(null);
@@ -293,7 +332,7 @@ File.prototype.saveWithFileAndContents = function(localFilePath, indexConnection
     async.series([
         function(callback)
         {
-            self.save(callback);
+            self.save(callback, true);
         },
         function(callback)
         {
@@ -323,8 +362,9 @@ File.prototype.saveWithFileAndContents = function(localFilePath, indexConnection
 File.prototype.deleteThumbnails = function () {
     const self = this;
     if (!isNull(Config.thumbnailableExtensions[self.ddr.fileExtension])) {
-        for (let i = 0; i < Config.thumbnails.sizes.length; i++) {
-            const dimension = Config.thumbnails.sizes[i];
+        const _ = require('underscore');
+
+        _.map(Config.thumbnails.sizes, function(dimension){
             if (Config.thumbnails.size_parameters.hasOwnProperty(dimension)) {
                 gfs.connection.delete(self.uri + "?thumbnail&size=" + dimension, function (err, result) {
                     if (err) {
@@ -332,7 +372,7 @@ File.prototype.deleteThumbnails = function () {
                     }
                 });
             }
-        }
+        });
     }
 };
 
@@ -728,12 +768,12 @@ File.prototype.extractDataAndSaveIntoDataStore = function(tempFileLocation, call
             let sheetHeader = getHeaders(sheet);
 
             let sheetJSON = XLSX.utils.sheet_to_json(sheet, {raw:true});
-            
+
             for(let i = 0; i < sheetJSON.length; i++)
             {
                 delete sheetJSON[i].__proto__["__rowNum__"];
             }
-            
+
             dataStoreWriter.updateDataFromArrayOfObjects(sheetJSON, callback, sheetName, sheetIndex, sheetHeader);
         }, function(err, result){
             callback(err, result);
@@ -1129,7 +1169,7 @@ File.prototype.generateThumbnails = function (callback) {
                 if (!isNull(Config.thumbnailableExtensions[self.ddr.fileExtension])) {
                     self.writeToTempFile(function (err, tempFileAbsPath) {
                         if (isNull(err)) {
-                            async.map(Config.thumbnails.sizes, function (thumbnailSize, callback) {
+                            async.mapSeries(Config.thumbnails.sizes, function (thumbnailSize, callback) {
                                     generateThumbnail(tempFileAbsPath, project.uri, thumbnailSize, callback);
                                 },
                                 function (err, results) {
@@ -1161,56 +1201,56 @@ File.prototype.generateThumbnails = function (callback) {
     }
 };
 
-File.prototype.moveToFolder = function(newParentFolder, callback)
-{
-    const self = this;
-
-    const oldParent = self.nie.isLogicalPartOf;
-    const newParent = newParentFolder.uri;
-
-    const query =
-        "DELETE DATA " +
-        "{ " +
-        "GRAPH [0] " +
-        "{ " +
-        "[1] nie:title ?title . " +
-        "} " +
-        "}; " +
-
-        "INSERT DATA " +
-        "{ " +
-        "GRAPH [0] " +
-        "{ " +
-        "[1] nie:title [2] " +
-        "} " +
-        "}; ";
-
-    db.connection.execute(query,
-        [
-            {
-                type: Elements.types.resourceNoEscape,
-                value: db.graphUri
-            },
-            {
-                type: Elements.types.resource,
-                value: self.uri
-            },
-            {
-                type: Elements.types.string,
-                value: newTitle
-            }
-        ],
-        function(err, result)
-        {
-            Cache.getByGraphUri(db.graphUri).delete(self.uri, function (err, result)
-            {
-                Cache.getByGraphUri(db.graphUri).delete(newParentFolder.uri, function (err, result)
-                {
-                    return callback(err, result);
-                });
-            });
-        });
-};
+// File.prototype.moveToFolder = function(newParentFolder, callback)
+// {
+//     const self = this;
+//
+//     const oldParent = self.nie.isLogicalPartOf;
+//     const newParent = newParentFolder.uri;
+//
+//     const query =
+//         "DELETE DATA " +
+//         "{ " +
+//         "GRAPH [0] " +
+//         "{ " +
+//         "[1] nie:title ?title . " +
+//         "} " +
+//         "}; " +
+//
+//         "INSERT DATA " +
+//         "{ " +
+//         "GRAPH [0] " +
+//         "{ " +
+//         "[1] nie:title [2] " +
+//         "} " +
+//         "}; ";
+//
+//     db.connection.executeViaJDBC(query,
+//         [
+//             {
+//                 type: Elements.types.resourceNoEscape,
+//                 value: db.graphUri
+//             },
+//             {
+//                 type: Elements.types.resource,
+//                 value: self.uri
+//             },
+//             {
+//                 type: Elements.types.string,
+//                 value: newTitle
+//             }
+//         ],
+//         function(err, result)
+//         {
+//             Cache.getByGraphUri(db.graphUri).delete(self.uri, function (err, result)
+//             {
+//                 Cache.getByGraphUri(db.graphUri).delete(newParentFolder.uri, function (err, result)
+//                 {
+//                     return callback(err, result);
+//                 });
+//             });
+//         });
+// };
 
 File = Class.extend(File, InformationElement, "nfo:FileDataObject");
 

@@ -36,14 +36,22 @@ function Resource (object)
 
 Resource.prototype.copyOrInitDescriptors = function(object, deleteIfNotInArgumentObject)
 {
-    const Ontology = require(Pathfinder.absPathInSrcFolder("/models/meta/ontology.js")).Ontology;
     const self = this;
 
-    const ontologyPrefixes = Ontology.getAllOntologyPrefixes();
-
-    for(let prefix in Elements)
+    if(deleteIfNotInArgumentObject)
     {
-        if(Elements.hasOwnProperty(prefix))
+        for(let key in self)
+        {
+            if(key !== "uri")
+            {
+                delete self[key];
+            }
+        }
+    }
+
+    for(let prefix in Elements.ontologies)
+    {
+        if(Elements.ontologies.hasOwnProperty(prefix))
         {
             if(isNull(self[prefix]))
             {
@@ -79,6 +87,50 @@ Resource.prototype.copyOrInitDescriptors = function(object, deleteIfNotInArgumen
     }
 };
 
+Resource.prototype.loadObjectWithQueryResults = function(queryResults, ontologyURIsArray)
+{
+    const self = this;
+    const Descriptor = require(Pathfinder.absPathInSrcFolder("/models/meta/descriptor.js")).Descriptor;
+
+    self.clearDescriptors();
+
+    if(!isNull(queryResults) && queryResults instanceof Array && queryResults.length > 0)
+    {
+        for (let i = 0; i < queryResults.length; i++)
+        {
+            const descriptor = new Descriptor(queryResults[i]);
+            const prefix = descriptor.prefix;
+            const shortName = descriptor.shortName;
+
+            if (!isNull(prefix) && !isNull(shortName) && _.contains(ontologyURIsArray, descriptor.ontology))
+            {
+                if (isNull(self[prefix]))
+                {
+                    self[prefix] = {};
+                }
+
+                if (!isNull(self[prefix][shortName]))
+                {
+                    //if there is already a value for this object, put it in an array
+                    if (!(self[prefix][shortName] instanceof Array))
+                    {
+                        self[prefix][shortName] = [self[prefix][shortName]];
+
+                    }
+
+                    self[prefix][shortName].push(descriptor.value);
+                }
+                else
+                {
+                    self[prefix][shortName] = descriptor.value;
+                }
+            }
+        }
+    }
+
+    return self;
+};
+
 Resource.exists = function(uri, callback, customGraphUri)
 {
     const self = this;
@@ -106,7 +158,7 @@ Resource.exists = function(uri, callback, customGraphUri)
         }
     }
 
-    db.connection.execute(
+    db.connection.executeViaJDBC(
         "WITH [0]\n"+
         "ASK \n" +
         "WHERE \n" +
@@ -130,12 +182,21 @@ Resource.exists = function(uri, callback, customGraphUri)
         function(err, result) {
             if(isNull(err))
             {
-                return callback(null, result);
+                if(result instanceof Array)
+                {
+                    return callback(null, result.length > 0);
+                }
+                else
+                {
+                    return callback(null, result);
+                }
             }
             else
             {
                 const msg = "Error checking for the existence of resource with uri : " + uri;
                 console.error(msg);
+                console.error(JSON.stringify(err));
+                console.error(JSON.stringify(result));
                 return callback(err, msg);
             }
         });
@@ -156,10 +217,10 @@ Resource.all = function(callback, req, customGraphUri, descriptorTypesToRemove, 
     ];
 
     let query =
-        "SELECT ?uri " +
-        "FROM [0]" +
-        "WHERE " +
-        "{ ";
+        "SELECT ?uri \n" +
+        "FROM [0]\n" +
+        "WHERE \n" +
+        "{ \n";
 
     if(!isNull(type))
     {
@@ -214,13 +275,13 @@ Resource.all = function(callback, req, customGraphUri, descriptorTypesToRemove, 
         );
     }
 
-    db.connection.execute(
+    db.connection.executeViaJDBC(
         query,
         queryArguments,
         function(err, results) {
             if(isNull(err))
             {
-                async.map(results,
+                async.mapSeries(results,
                     function(result, cb)
                     {
                         const aResource = new self.prototype.constructor(result);
@@ -265,7 +326,7 @@ Resource.prototype.deleteAllMyTriples = function(callback, customGraphUri)
 
     });
 
-    Config.getDBByGraphUri(customGraphUri).connection.execute(
+    Config.getDBByGraphUri(customGraphUri).connection.executeViaJDBC(
             "WITH [0] \n" +
             "DELETE \n" +
             "WHERE " +
@@ -311,8 +372,7 @@ Resource.prototype.deleteDescriptorTriples = function(descriptorInPrefixedForm, 
     {
         if(!isNull(valueInPrefixedForm))
         {
-            //TODO CACHE DONE
-            db.connection.execute(
+            db.connection.executeViaJDBC(
                     "WITH [0] \n" +
                     "DELETE \n" +
                     "WHERE " +
@@ -353,8 +413,7 @@ Resource.prototype.deleteDescriptorTriples = function(descriptorInPrefixedForm, 
         }
         else
         {
-            //TODO CACHE DONE
-            db.connection.execute(
+            db.connection.executeViaJDBC(
                     "WITH [0] \n" +
                     "DELETE \n" +
                     "WHERE " +
@@ -404,7 +463,7 @@ Resource.prototype.descriptorValue = function(descriptorWithNamespaceSeparatedBy
 
     const graphUri = (!isNull(customGraphUri) && typeof customGraphUri === "string") ? customGraphUri : db.graphUri;
 
-    db.connection.execute(
+    db.connection.executeViaJDBC(
             "WITH [0] \n" +
             "SELECT ?p ?o \n" +
             "WHERE " +
@@ -448,22 +507,20 @@ Resource.prototype.clearOutgoingPropertiesFromOntologies = function(ontologyURIs
     const self = this;
 
     const graphUri = (!isNull(customGraphUri) && typeof customGraphUri === "string") ? customGraphUri : db.graphUri;
+    const descriptors = self.getPropertiesFromOntologies(ontologyURIsArray, graphUri);
 
-    self.getPropertiesFromOntologies(ontologyURIsArray, function(err, descriptors)
+    const triplesToDelete = [];
+    for(let i = 0; i < descriptors.length; i++)
     {
-        const triplesToDelete = [];
-        for(let i = 0; i < descriptors.length; i++)
-        {
-            const descriptor = descriptors[i];
-            triplesToDelete.push({
-                subject : self.uri,
-                predicate : descriptor.uri,
-                object : null
-            });
-        }
+        const descriptor = descriptors[i];
+        triplesToDelete.push({
+            subject : self.uri,
+            predicate : descriptor.uri,
+            object : null
+        });
+    }
 
-        db.deleteTriples(triplesToDelete, db.graphUri, callback);
-    }, graphUri);
+    db.deleteTriples(triplesToDelete, db.graphUri, callback);
 };
 
 /**
@@ -492,76 +549,21 @@ Resource.prototype.loadPropertiesFromOntologies = function(ontologyURIsArray, ca
         }
     ];
 
-    let fromString = "";
-    let filterString = "";
-
-    if(!isNull(ontologyURIsArray))
-    {
-        const fromElements = DbConnection.buildFromStringAndArgumentsArrayForOntologies(ontologyURIsArray, argumentsArray.length);
-        filterString = DbConnection.buildFilterStringForOntologies(ontologyURIsArray, "uri");
-
-        argumentsArray = argumentsArray.concat(fromElements.argumentsArray);
-        fromString = fromString + fromElements.fromString;
-    }
-
     const query =
-        " SELECT DISTINCT ?uri ?value ?label ?comment \n" +
+        " SELECT DISTINCT ?uri ?value \n" +
         " FROM [0] \n" +
-        fromString + "\n" +
         " WHERE \n" +
         " { \n" +
-        " [1] ?uri ?value .\n" +
-        " OPTIONAL \n" +
-        "{  \n" +
-        "?uri    rdfs:label  ?label .\n " +
-        "FILTER (lang(?label) = \"\" || lang(?label) = \"en\")" +
-        "} .\n" +
-        " OPTIONAL " +
-        "{  \n" +
-        "?uri  rdfs:comment   ?comment. \n" +
-        "FILTER (lang(?comment) = \"\" || lang(?comment) = \"en\")" +
-        "} .\n" +
-
-        filterString +
+        "   [1] ?uri ?value .\n" +
         " } \n";
 
-    db.connection.execute(query,
+    db.connection.executeViaJDBC(query,
         argumentsArray,
         function(err, descriptors) {
             if(isNull(err))
             {
-                const Descriptor = require(Pathfinder.absPathInSrcFolder("/models/meta/descriptor.js")).Descriptor;
-                for (let i = 0; i < descriptors.length; i++)
-                {
-                    const descriptor = new Descriptor(descriptors[i]);
-                    const prefix = descriptor.prefix;
-                    const shortName = descriptor.shortName;
-                    if (!isNull(prefix) && !isNull(shortName))
-                    {
-                        if (isNull(self[prefix]))
-                        {
-                            self[prefix] = {};
-                        }
-
-                        if (!isNull(self[prefix][shortName]))
-                        {
-                            //if there is already a value for this object, put it in an array
-                            if (!(self[prefix][shortName] instanceof Array))
-                            {
-                                self[prefix][shortName] = [self[prefix][shortName]];
-
-                            }
-
-                            self[prefix][shortName].push(descriptor.value);
-                        }
-                        else
-                        {
-                            self[prefix][shortName] = descriptor.value;
-                        }
-                    }
-                }
-
-                return callback(null, self);
+                self.loadObjectWithQueryResults(descriptors, ontologyURIsArray);
+                callback(null, self);
             }
             else
             {
@@ -578,88 +580,67 @@ Resource.prototype.loadPropertiesFromOntologies = function(ontologyURIsArray, ca
  * @param customGraphUri
  */
 
-Resource.prototype.getPropertiesFromOntologies = function(ontologyURIsArray, callback, customGraphUri, typeConfigsToRetain)
+Resource.prototype.getPropertiesFromOntologies = function(ontologyURIsArray, customGraphUri, typeConfigsToRetain)
 {
-    const Descriptor = require(Pathfinder.absPathInSrcFolder("/models/meta/descriptor.js")).Descriptor;
     const self = this;
+    const Descriptor = require(Pathfinder.absPathInSrcFolder("/models/meta/descriptor.js")).Descriptor;
+    const Ontology = require(Pathfinder.absPathInSrcFolder("/models/meta/ontology.js")).Ontology;
 
     const graphUri = (!isNull(customGraphUri) && typeof customGraphUri === "string") ? customGraphUri : db.graphUri;
 
-    //build arguments string from the requested ontologies,
-    // as well as the FROM string with the parameter placeholders
-    let argumentsArray = [
-        {
-            type: Elements.types.resourceNoEscape,
-            value: graphUri
-        },
-        {
-            type: Elements.types.resource,
-            value: self.uri
-        }
-    ];
-
-    let fromString = "";
-    let filterString = "";
-
-    if(!isNull(ontologyURIsArray))
+    const transformUrisToPrefixes = function(urisArray)
     {
-        const fromElements = DbConnection.buildFromStringAndArgumentsArrayForOntologies(ontologyURIsArray, argumentsArray.length);
-        filterString = DbConnection.buildFilterStringForOntologies(ontologyURIsArray, "uri");
+        let prefixes = [];
+        for (let i = 0; i < urisArray.length; i++)
+        {
+            prefixes.push(Ontology.getOntologyPrefix(urisArray[i]));
+        }
+        return prefixes;
+    };
 
-        argumentsArray = argumentsArray.concat(fromElements.argumentsArray);
-        fromString = fromString + fromElements.fromString;
+    let prefixes;
+    if(ontologyURIsArray instanceof Array)
+    {
+        prefixes = transformUrisToPrefixes(ontologyURIsArray);
+    }
+    else
+    {
+        prefixes = Ontology.getAllOntologyPrefixes();
     }
 
-    const query =
-        " SELECT DISTINCT ?uri ?value ?label ?comment \n" +
-        " FROM [0] \n" +
-        fromString + "\n" +
-        " WHERE \n" +
-        " { \n" +
-        " [1] ?uri ?value .\n" +
-        " OPTIONAL \n" +
-        "{  \n" +
-        "?uri    rdfs:label  ?label .\n " +
-        "FILTER (lang(?label) = \"\" || lang(?label) = \"en\")" +
-        "} .\n" +
-        " OPTIONAL " +
-        "{  \n" +
-        "?uri  rdfs:comment   ?comment. \n" +
-        "FILTER (lang(?comment) = \"\" || lang(?comment) = \"en\")" +
-        "} .\n" +
+    const formattedResults = [];
 
-        filterString +
-        " } \n";
-
-    db.connection.execute(query,
-        argumentsArray,
-        function(err, descriptors) {
-            if(isNull(err))
+    for(let i = 0; i < prefixes.length; i++)
+    {
+        let prefix = prefixes[i];
+        if(!isNull(self[prefix]))
+        {
+            let elements = Object.keys(self[prefix]);
+            for(let j = 0; j < elements.length; j++)
             {
-                const formattedResults = [];
+                let element = elements[j];
                 let formattedDescriptor;
-                
-                for(let i = 0; i < descriptors.length; i++)
+                if(!isNull(Elements.ontologies[prefix][element]) && !isNull(self[prefix][element]))
                 {
                     try{
-                        formattedDescriptor = new Descriptor(descriptors[i], typeConfigsToRetain);
+                        formattedDescriptor = new Descriptor({
+                            prefix : prefix,
+                            shortName : element,
+                            value : self[prefix][element]
+                        }, typeConfigsToRetain);
+
+                        formattedResults.push(formattedDescriptor);
                     }
                     catch(e)
                     {
                         console.error(JSON.stringify(e));
                     }
-
-                    formattedResults.push(formattedDescriptor);
                 }
+            }
+        }
+    }
 
-                return callback(null, formattedResults);
-            }
-            else
-            {
-                console.error("Error fetching descriptors from ontologies : "+ JSON.stringify(ontologyURIsArray)+ ". Error returned : " + descriptors);
-                return callback(1, descriptors);
-            }
-        });
+    return formattedResults;
 };
 
 Resource.prototype.validateDescriptorValues = function(callback)
@@ -788,10 +769,6 @@ Resource.prototype.replaceDescriptorsInTripleStore = function(newDescriptors, db
                 {
                     objects = [objects];
                 }
-                else
-                {
-                    objects = objects;
-                }
 
                 for(let j = 0; j < objects.length ; j++)
                 {
@@ -830,7 +807,7 @@ Resource.prototype.replaceDescriptorsInTripleStore = function(newDescriptors, db
             "WHERE \n" +
             "{ \n" +
             deleteString + " \n" +
-            "}; \n" +
+            "} \n" +
             "INSERT DATA\n" +
             "{ \n" +
             insertString + " \n" +
@@ -838,7 +815,7 @@ Resource.prototype.replaceDescriptorsInTripleStore = function(newDescriptors, db
 
         //Invalidate cache record for the updated resources
         Cache.getByGraphUri(graphName).delete(subject, function(err, result){
-            db.connection.execute(query, queryArguments, function(err, results)
+            db.connection.executeViaJDBC(query, queryArguments, function(err, results)
             {
                 return callback(err, results);
                 //console.log(results);
@@ -948,7 +925,7 @@ Resource.prototype.save = function
                     }
                 };
 
-                async.map(changes, saveChange, function (err, results) {
+                async.mapSeries(changes, saveChange, function (err, results) {
                     if (isNull(err)) {
                         archivedResource.save(function (err, savedArchivedResource) {
                             cb(err, savedArchivedResource);
@@ -1150,7 +1127,15 @@ Resource.prototype.clearDescriptors = function(descriptorTypesToClear, exception
         delete self[descriptor.prefix][descriptor.shortName];
     }
 
-    self.updateDescriptors(filteredDescriptors);
+    if(isNull(descriptorTypesToClear) && isNull(exceptionedDescriptorTypes))
+    {
+        return;
+    }
+    else
+    {
+        self.updateDescriptors(filteredDescriptors);
+    }
+
 };
 
 /**
@@ -1228,7 +1213,7 @@ Resource.prototype.getLiteralPropertiesFromOntologies = function(ontologyURIsArr
         fromString = fromString + fromElements.fromString;
     }
 
-    db.connection.execute(
+    db.connection.executeViaJDBC(
             "SELECT ?property ?object\n" +
             " FROM [0] \n"+
             fromString + "\n" +
@@ -1569,7 +1554,7 @@ Resource.getUriFromHumanReadableUri = function(humanReadableUri, callback, custo
 
     const getFromTripleStore = function(callback)
     {
-        db.connection.execute(
+        db.connection.executeViaJDBC(
             "SELECT ?uri \n" +
             "FROM [0] \n" +
             "WHERE \n" +
@@ -1582,7 +1567,7 @@ Resource.getUriFromHumanReadableUri = function(humanReadableUri, callback, custo
                     value : graphUri
                 },
                 {
-                    type : Elements.ddr.humanReadableURI.type,
+                    type : Elements.ontologies.ddr.humanReadableURI.type,
                     value : humanReadableUri
                 }
             ],
@@ -1659,7 +1644,6 @@ Resource.findByUri = function(uri, callback, allowedGraphsArray, customGraphUri,
             typesArray = [self.prefixedRDFType];
         }
 
-
         Cache.getByGraphUri(customGraphUri).getByQuery(
             {
                 "$and": [
@@ -1702,14 +1686,13 @@ Resource.findByUri = function(uri, callback, allowedGraphsArray, customGraphUri,
 
     const saveToCache = function (uri, resource, callback) {
         Cache.getByGraphUri(customGraphUri).put(uri, resource, function (err) {
-            if (isNull(err)) {
-                if (typeof callback === "function") {
-                    return callback(null, resource);
-                }
-            }
-            else {
+            if (!isNull(err)) {
                 const msg = "Unable to set value of " + resource.uri + " as " + JSON.stringify(resource) + " in cache : " + JSON.stringify(err);
                 console.log(msg);
+            }
+
+            if (typeof callback === "function") {
+                return callback(null, resource);
             }
         });
     };
@@ -1801,10 +1784,14 @@ Resource.findByUri = function(uri, callback, allowedGraphsArray, customGraphUri,
                         {
                             if(!isNull(object))
                             {
-                                saveToCache(uri, object);
+                                saveToCache(uri, object, function(err, result){
+                                    cb(err, object);
+                                });
                             }
-
-                            cb(err, object);
+                            else
+                            {
+                                cb(err, object);
+                            }
                         }
                         else
                         {
@@ -1959,7 +1946,7 @@ Resource.findByPropertyValue = function(
 
             for (let i = 0; i < types.length; i++)
             {
-                typesRestrictions = typesRestrictions + "       ?uri rdf:type " + types[i];
+                typesRestrictions = typesRestrictions + "       ?resource_uri rdf:type " + types[i];
 
                 if(i < types.length - 1)
                 {
@@ -1969,14 +1956,14 @@ Resource.findByPropertyValue = function(
 
             if(!isNull(ignoreArchivedResources) && ignoreArchivedResources === true )
             {
-                typesRestrictions = typesRestrictions + "       FILTER NOT EXISTS { ?uri rdf:type ddr:ArchivedResource }";
+                typesRestrictions = typesRestrictions + "\nFILTER NOT EXISTS { ?resource_uri rdf:type ddr:ArchivedResource }";
             }
 
             if(!isNull(descriptor) && descriptor instanceof Array)
             {
                 for(let i = 0; i < descriptor.length; i++)
                 {
-                    descriptorValueRestrictions += "       ?uri  ";
+                    descriptorValueRestrictions += "       ?resource_uri  ";
 
                     descriptorValueArguments.push({
                         type : Elements.types.prefixedResource,
@@ -1997,7 +1984,7 @@ Resource.findByPropertyValue = function(
             }
             else
             {
-                descriptorValueRestrictions = "       ?uri [1] [2]. \n";
+                descriptorValueRestrictions = "       ?resource_uri [1] [2]. \n";
 
                 descriptorValueArguments.push({
                     type : Elements.types.prefixedResource,
@@ -2010,14 +1997,24 @@ Resource.findByPropertyValue = function(
                 });
             }
 
-            db.connection.execute(
-                "SELECT ?uri \n" +
+            /*const query =
+                " SELECT DISTINCT ?uri ?value \n" +
+                " FROM [0] \n" +
+                " WHERE \n" +
+                " { \n" +
+                "   [1] ?uri ?value .\n" +
+                " } \n";
+                */
+
+            db.connection.executeViaJDBC(
+                "SELECT ?resource_uri ?descriptor_uri ?value\n" +
                 "FROM [0]\n"+
                 "WHERE \n" +
                 "{ \n" +
                 "   {\n" +
+                "       ?resource_uri ?descriptor_uri ?value ."+ "\n " +
                         descriptorValueRestrictions +
-                        typesRestrictions +
+                        typesRestrictions + "\n " +
                 "   }\n" +
                 "} \n",
 
@@ -2027,32 +2024,51 @@ Resource.findByPropertyValue = function(
                         value : graphUri
                     },
                 ].concat(descriptorValueArguments),
-                function(err, result) {
+                function(err, descriptors) {
                     if(isNull(err))
                     {
-                        if(!isNull(result) && result instanceof Array)
+                        if(!isNull(descriptors) && descriptors instanceof Array)
                         {
-                            if(result.length === 1)
-                                return callback(null, result[0]);
-                            else if(result.length > 1)
+                            if(descriptors.length === 0)
                             {
-                                if(descriptor instanceof Array)
-                                {
-                                    let descriptorValues = "";
-                                    for(let i = 0; i < descriptor.length;i++)
-                                    {
-                                        descriptorValues += descriptor[i].getPrefixedForm() + " : " + descriptor[i].value  + " || ";
-                                    }
+                                return callback(null, null);
+                            }
+                            else
+                            {
+                                const uris = _.unique(descriptors, function(descriptor){
+                                    return descriptor.resource_uri;
+                                });
 
-                                    return callback(1, "There are more than one " + JSON.stringify(self.prefixedRDFType) + " with properties " + descriptorValues);
-                                }
-                                else
+                                if(uris.length > 1)
                                 {
-                                    return callback(1, "There are more than one " + JSON.stringify(self.prefixedRDFType) + " with property " + descriptor.getPrefixedForm() + " with value " + descriptor.value + ". ");
+                                    return callback(1, "[ERROR] There are more than one resources with values " +  JSON.stringify(descriptorValueRestrictions) + " ! They are : " + JSON.stringify(uris));
+                                }
+                                if(uris.length === 1)
+                                {
+                                    const uri = uris[0].resource_uri;
+                                    if(!isNull(descriptors) && descriptors instanceof Array)
+                                    {
+                                        _.map(descriptors, function(descriptor){
+                                            descriptor.uri = descriptor.descriptor_uri;
+                                            delete descriptor.descriptor_uri;
+                                        });
+
+                                        const newResource = Object.create(self.prototype);
+                                        newResource.baseConstructor(
+                                            {
+                                                uri : uri
+                                            }
+                                        );
+
+                                        newResource.loadObjectWithQueryResults(descriptors, ontologiesArray);
+                                        return callback(null, newResource);
+                                    }
+                                    else
+                                    {
+                                        return callback(null, null);
+                                    }
                                 }
                             }
-                            else if(result.length === 0)
-                                return callback(null, null);
                         }
                         else
                         {
@@ -2069,31 +2085,13 @@ Resource.findByPropertyValue = function(
         };
 
         queryTripleStore(function (err, result) {
-            if (isNull(err)) {
+            if (isNull(err))
+            {
                 if (!isNull(result)) {
-                    const resource = Object.create(self.prototype);
-                    //initialize all ontology namespaces in the new object as blank objects
-                    // if they are not already present
-
-                    resource.uri = result.uri;
-
-                    /**
-                     * TODO Handle the edge case where there is a resource with the same uri in different graphs in Dendro
-                     */
-                    resource.loadPropertiesFromOntologies(ontologiesArray, function (err, loadedObject) {
-                        if (isNull(err)) {
-                            resource.baseConstructor(loadedObject);
-                            return callback(null, resource);
-                        }
-                        else {
-                            const msg = "Error while trying to retrieve resource with uri " + self.uri + " from triple store.";
-                            console.error(msg);
-                            console.error(JSON.stringify(resource));
-                            return callback(1, resource);
-                        }
-                    }, customGraphUri);
+                    return callback(null, result);
                 }
-                else {
+                else
+                {
                     if (Config.debug.resources.log_missing_resources) {
                         const msg = "Resource with property " +descriptor.getPrefixedForm()+ " of value "+ descriptor.value + "  does not exist in Dendro.";
                         console.log(msg);
@@ -2244,7 +2242,7 @@ Resource.prototype.getArchivedVersions = function(offset, limit, callback, custo
         query = query + " OFFSET " + limit + "\n";
     }
 
-    db.connection.execute(query,
+    db.connection.executeViaJDBC(query,
         [
             {
                 value : graphUri,
@@ -2265,7 +2263,7 @@ Resource.prototype.getArchivedVersions = function(offset, limit, callback, custo
                     }, null, customGraphUri);
                 };
 
-                async.map(versions, getVersionContents, function(err, formattedVersions)
+                async.mapSeries(versions, getVersionContents, function(err, formattedVersions)
                 {
                     if(isNull(err))
                     {
@@ -2388,9 +2386,9 @@ Resource.prototype.getDescriptors = function(descriptorTypesNotToGet, descriptor
     const self = this;
     let descriptorsArray = [];
 
-    for(let prefix in Elements)
+    for(let prefix in Elements.ontologies)
     {
-        if(Elements.hasOwnProperty(prefix) && self.hasOwnProperty(prefix))
+        if(Elements.ontologies.hasOwnProperty(prefix) && self.hasOwnProperty(prefix))
         {
             for(let shortName in self[prefix])
             {
@@ -2452,16 +2450,6 @@ Resource.prototype.calculateDescriptorDeltas = function(newResource, descriptors
             }
         }
 
-        // if (!isNull(descriptorsToExclude))
-        // {
-        //     for (let i = 0; i < descriptorsToExclude.length; i++) {
-        //         const descriptorType = descriptorsToExclude[i];
-        //         if (d[descriptorType]) {
-        //              return deltas;
-        //         }
-        //     }
-        // }
-
         const Change = require(Pathfinder.absPathInSrcFolder("/models/versions/change.js")).Change;
 
         const newChange = new Change({
@@ -2481,7 +2469,7 @@ Resource.prototype.calculateDescriptorDeltas = function(newResource, descriptors
     for(let i = 0; i < ontologies.length; i++)
     {
         let prefix = ontologies[i];
-        const descriptors = Elements[prefix];
+        const descriptors = Elements.ontologies[prefix];
 
         for(let descriptor in descriptors)
         {
@@ -2616,7 +2604,7 @@ Resource.prototype.checkIfHasPredicateValue = function(predicateInPrefixedForm, 
                 "[1] [2] [3] ." +
                 "} \n";
 
-            db.connection.execute(query,
+            db.connection.executeViaJDBC(query,
                 [
                     {
                         type: Elements.types.resourceNoEscape,
@@ -2637,7 +2625,7 @@ Resource.prototype.checkIfHasPredicateValue = function(predicateInPrefixedForm, 
                 ],
                 function (err, result) {
                     if (isNull(err)) {
-                        if (result === true) {
+                        if (result instanceof Array && result.length > 0) {
                             return callback(null, true);
                         }
                         else {
@@ -2670,7 +2658,9 @@ Resource.prototype.checkIfHasPredicateValue = function(predicateInPrefixedForm, 
                    {
                        if(descriptorToCheck.type === Elements.types.prefixedResource)
                        {
-                           return callback(null,_.contains(cachedResource[namespace][element], Descriptor.getUriFromPrefixedForm(value)));
+                           let values = cachedResource[namespace][element];
+                           let valueToTest = Descriptor.getUriFromPrefixedForm(value);
+                           return callback(null,_.contains(values, valueToTest));
                        }
                        else
                        {
@@ -2760,7 +2750,7 @@ Resource.prototype.getLogicalParts = function(callback)
         "   ?uri rdf:type nfo:FileDataObject \n" +
         "} \n";
 
-    async.map([
+    async.mapSeries([
         {
             query : childFoldersQuery,
             childClass : Folder
@@ -2770,7 +2760,7 @@ Resource.prototype.getLogicalParts = function(callback)
             childClass : File
         }
     ], function(argument, callback){
-        db.connection.execute(argument.query,
+        db.connection.executeViaJDBC(argument.query,
             [
                 {
                     type: Elements.types.resourceNoEscape,
@@ -2792,7 +2782,7 @@ Resource.prototype.getLogicalParts = function(callback)
                             });
                         };
 
-                        async.map(children, getChildrenProperties, function(err, children){
+                        async.mapSeries(children, getChildrenProperties, function(err, children){
                             if(isNull(err))
                             {
                                 return callback(null, children);
@@ -2910,67 +2900,6 @@ Resource.prototype.isOfClass = function(classNameInPrefixedForm, callback)
     });
 };
 
-Resource.prototype.toCSVLine = function(existingHeaders)
-{
-    const self = this;
-
-    const flatDescriptors = self.getDescriptors();
-
-    if(existingHeaders instanceof Object && Object.keys(existingHeaders).length === 0)
-    {
-        var headers = {
-            uri : 0
-        };
-    }
-    else
-    {
-        var headers = JSON.parse(JSON.stringify(existingHeaders));
-    }
-
-    /*Update header positions*/
-    for(var i = 0; i < flatDescriptors.length; i++)
-    {
-        var descriptor = flatDescriptors[i];
-        var descriptorPrefixedEscaped = descriptor.prefix + "_" + descriptor.shortName;
-        if(isNull(headers[descriptorPrefixedEscaped]))
-        {
-            headers[descriptorPrefixedEscaped] = Object.keys(headers).length;
-        }
-    }
-
-    /*Write value in the right column, according to header*/
-
-    const descriptorLine = new Array(headers.length);
-
-    descriptorLine[headers['uri']] = self.uri;
-
-    for(var i = 0; i < flatDescriptors.length; i++)
-    {
-        var descriptor = flatDescriptors[i];
-        var descriptorPrefixedEscaped = descriptor.prefix + "_" + descriptor.shortName;
-        const columnIndex = headers[descriptorPrefixedEscaped];
-        descriptorLine[columnIndex] = descriptor.value;
-    }
-
-    /**Convert CSV Columns Array to string**/
-    let csvLine = '';
-    for(var i = 0; i < descriptorLine.length; i++)
-    {
-        csvLine = csvLine + descriptorLine[i];
-        if(i < descriptorLine.length - 1)
-        {
-            csvLine = csvLine + ',';
-        }
-    }
-
-    csvLine = csvLine + "\n";
-
-    return {
-        csv_line: csvLine,
-        headers : headers
-    };
-};
-
 Resource.randomInstance = function(typeInPrefixedFormat, callback, customGraphUri) {
     const self = this;
 
@@ -2978,7 +2907,7 @@ Resource.randomInstance = function(typeInPrefixedFormat, callback, customGraphUr
 
     async.waterfall([
         function(callback) {
-            db.connection.execute(
+            db.connection.executeViaJDBC(
                     "SELECT (count(?s) as ?c) \n" +
                     "FROM [0] \n" +
                     "WHERE \n" +
@@ -3013,7 +2942,7 @@ Resource.randomInstance = function(typeInPrefixedFormat, callback, customGraphUr
                 });
         },
         function(randomNumber,callback) {
-            db.connection.execute(
+            db.connection.executeViaJDBC(
                 "SELECT ?s \n"+
                 "FROM [0] \n"+
                 "WHERE \n" +
@@ -3122,7 +3051,7 @@ Resource.deleteAll = function(callback, customGraphUri)
     {
         if (isNull(err))
         {
-            db.connection.execute(
+            db.connection.executeViaJDBC(
                 query,
                 queryArguments,
                 function (err, result)
@@ -3152,7 +3081,7 @@ Resource.deleteAllWithCertainDescriptorValueAndTheirOutgoingTriples = function(d
     const pagedFetchResourcesWithDescriptor = function (descriptor, page, pageSize, callback) {
         const offset = pageSize * page;
 
-        db.connection.execute(
+        db.connection.executeViaJDBC(
             "WITH [0] \n" +
             "SELECT ?uri \n" +
             "WHERE \n" +
@@ -3231,7 +3160,7 @@ Resource.deleteAllWithCertainDescriptorValueAndTheirOutgoingTriples = function(d
     deleteAllCachedResourcesWithDescriptorValue(descriptor, 0, Config.limits.db.pageSize, function(err){
         if(isNull(err))
         {
-            db.connection.execute(
+            db.connection.executeViaJDBC(
                 "WITH [0]\n"+
                 "DELETE \n" +
                 "WHERE \n" +
@@ -3401,7 +3330,7 @@ Resource.arrayToCSVFile = function(resourceArray, fileName, callback)
          fs.appendFile(tempFileAbsPath, csvLine, cb);
          };
 
-         async.map(resourceArray, writeCSVLineToFile, function(err, results){
+         async.mapSeries(resourceArray, writeCSVLineToFile, function(err, results){
          return callback(err, tempFileAbsPath);
          });
          }); */
@@ -3459,7 +3388,7 @@ Resource.getCount = function(callback) {
             typeRestrictions +
         "}\n";
 
-    db.connection.execute(
+    db.connection.executeViaJDBC(
         countQuery,
         queryArguments,
         function(err, count) {

@@ -68,7 +68,7 @@ Interaction.all = function(callback, streaming, customGraphUri) {
 
         // get all the information about all the interaction
         // and return the array of interactions, complete with that info
-        async.map(interactions, getInteractionInformation, function (err, interactionsToReturn) {
+        async.mapSeries(interactions, getInteractionInformation, function (err, interactionsToReturn) {
             if (isNull(err)) {
                 return callback(null, interactionsToReturn);
             }
@@ -88,7 +88,7 @@ Interaction.all = function(callback, streaming, customGraphUri) {
             " ?uri rdf:type ddr:Interaction " +
             "} ";
 
-        db.connection.execute(query,
+        db.connection.executeViaJDBC(query,
             [
                 {
                     type: Elements.types.resourceNoEscape,
@@ -127,7 +127,7 @@ Interaction.all = function(callback, streaming, customGraphUri) {
             " ?uri rdf:type ddr:Interaction " +
             "} ";
 
-        db.connection.execute(query,
+        db.connection.executeViaJDBC(query,
             [
                 {
                     type: Elements.types.resourceNoEscape,
@@ -183,7 +183,7 @@ Interaction.all = function(callback, streaming, customGraphUri) {
                             " OFFSET [1] \n" +
                             " LIMIT [2] \n";
 
-                        db.connection.execute(query,
+                        db.connection.executeViaJDBC(query,
                             [
                                 {
                                     type: Elements.types.resourceNoEscape,
@@ -317,6 +317,10 @@ Interaction.prototype.saveToMySQL = function(callback, overwrite)
 
         if (!isNull(self.ddr.recommendationCallTimeStamp) && typeof self.ddr.recommendationCallTimeStamp.slice(0, 19) !== "undefined") {
             inserts.push(moment(self.ddr.recommendationCallTimeStamp, moment.ISO_8601).format("YYYY-MM-DD HH:mm:ss"));
+        }
+        else
+        {
+            inserts.push(null);
         }
 
         if(Config.debug.database.log_all_queries)

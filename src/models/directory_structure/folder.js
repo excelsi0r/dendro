@@ -1,6 +1,12 @@
 //complies with the NIE ontology (see http://www.semanticdesktop.org/ontologies/2007/01/19/nie/#InformationElement)
 
 const path = require("path");
+const fs = require("fs");
+const nfs = require('node-fs');
+const slug = require('slug');
+const async = require("async");
+const _ = require("underscore");
+
 const Pathfinder = global.Pathfinder;
 const Config = require(Pathfinder.absPathInSrcFolder("models/meta/config.js")).Config;
 const DbConnection = require(Pathfinder.absPathInSrcFolder("/kb/db.js")).DbConnection;
@@ -13,13 +19,8 @@ const User = require(Pathfinder.absPathInSrcFolder("/models/user.js")).User;
 const File = require(Pathfinder.absPathInSrcFolder("/models/directory_structure/file.js")).File;
 const Elements = require(Pathfinder.absPathInSrcFolder("/models/meta/elements.js")).Elements;
 
-const slug = require('slug');
-const fs = require("fs");
-
 const db = Config.getDBByID();
 
-const async = require("async");
-const _ = require("underscore");
 
 function Folder (object)
 {
@@ -92,10 +93,8 @@ Folder.prototype.saveIntoFolder = function(
                 }
             });
         }
-        else if (node instanceof Folder) {
-            const fs = require("fs");
-            const nfs = require('node-fs');
-            const path = require("path");
+        else if (node instanceof Folder)
+        {
             const destinationFolder = destinationFolderAbsPath + "/" + node.nie.title;
 
             //mode = 0777, recursive = true
@@ -123,7 +122,7 @@ Folder.prototype.saveIntoFolder = function(
                                     });
                                 };
 
-                                async.map(children, saveChild, function (err, childrenNodes) {
+                                async.mapSeries(children, saveChild, function (err, childrenNodes) {
                                     if (isNull(err)) {
                                         const message = "Finished saving a complete folder at " + node.uri;
                                         console.log(message);
@@ -248,7 +247,7 @@ Folder.prototype.getChildrenRecursive = function (callback, includeSoftDeletedCh
         "   ?uri nie:title ?name. \n" +
         "} ";*/
 
-    db.connection.execute(query,
+    db.connection.executeViaJDBC(query,
         [
             {
                 type: Elements.types.resourceNoEscape,
@@ -358,7 +357,7 @@ Folder.prototype.zipAndDownload = function(includeMetadata, callback, bagItOptio
 
                         console.log("FINAL METADATA : " + JSON.stringify(metadata));
 
-                        fs.writeFile(outputFilename, JSON.stringify(metadata, null, 4), function(err) {
+                        fs.writeFile(outputFilename, JSON.stringify(metadata, null, 4), "utf-8", function(err) {
                             if(err) {
                                 console.log(err);
                                 cb(err);
@@ -452,7 +451,7 @@ Folder.prototype.bagit = function(bagItOptions, callback) {
 
                         console.log("FINAL METADATA : " + JSON.stringify(metadata));
 
-                        fs.writeFile(outputFilename, JSON.stringify(metadata, null, 4), function(err) {
+                        fs.writeFile(outputFilename, JSON.stringify(metadata, null, 4), "utf-8", function(err) {
                             if(err) {
                                 console.log(err);
                                 cb(err);
@@ -511,7 +510,6 @@ Folder.zip = function(sourceFolderAbsPath, destinationFolderForZipAbsPath, callb
     }
     else
     {
-        const fs = require("fs");
         const exec = require("child_process").exec;
 
         if(isNull(nameForFinishedZipFile))
@@ -523,16 +521,19 @@ Folder.zip = function(sourceFolderAbsPath, destinationFolderForZipAbsPath, callb
         const parentFolderAbsPath = path.resolve(sourceFolderAbsPath, '..');
         const nameOfFolderToZip = path.basename(sourceFolderAbsPath);
 
+        let cwd;
+        let command;
+
         if(zipContentsInsteadOfFolder)
         {
-            var cwd =  {cwd: sourceFolderAbsPath};
-            var command = 'zip -r \"' + nameForFinishedZipFile + "\" \* &&\n mv " + nameForFinishedZipFile + " ..";
+            cwd =  {cwd: sourceFolderAbsPath};
+            command = 'zip -r \"' + nameForFinishedZipFile + "\" \* &&\n mv " + nameForFinishedZipFile + " ..";
 
         }
         else
         {
-            var cwd =  {cwd: parentFolderAbsPath};
-            var command = 'zip -r \"' + nameForFinishedZipFile + '\" .\/\"' + nameOfFolderToZip + '\"';
+            cwd =  {cwd: parentFolderAbsPath};
+            command = 'zip -r \"' + nameForFinishedZipFile + '\" .\/\"' + nameOfFolderToZip + '\"';
         }
 
         console.log("Zipping file with command " + command + " on folder " + parentFolderAbsPath + "....");
@@ -546,11 +547,13 @@ Folder.zip = function(sourceFolderAbsPath, destinationFolderForZipAbsPath, callb
             else {
                 console.log(stdout);
 
+                let finishedZipFileAbsPath;
+
                 if (zipContentsInsteadOfFolder) {
-                    var finishedZipFileAbsPath = destinationFolderForZipAbsPath;
+                    finishedZipFileAbsPath = destinationFolderForZipAbsPath;
                 }
                 else {
-                    var finishedZipFileAbsPath = path.join(destinationFolderForZipAbsPath, nameForFinishedZipFile);
+                    finishedZipFileAbsPath = path.join(destinationFolderForZipAbsPath, nameForFinishedZipFile);
                 }
 
                 console.log("Folder is in zip file " + finishedZipFileAbsPath);
@@ -873,13 +876,11 @@ Folder.prototype.loadMetadata = function(
 
     const getDescriptor = function(prefixedForm, node)
     {
-        const titleObject = _.find(node.metadata, function(descriptor){
+        const wantedDescriptor = _.find(node.metadata, function(descriptor){
             return descriptor.prefixedForm === prefixedForm;
         });
 
-        const descriptor = new Descriptor(titleObject);
-
-        return descriptor;
+        return new Descriptor(wantedDescriptor);
     };
 
     const loadMetadataIntoThisFolder = function(node, callback)
@@ -945,7 +946,6 @@ Folder.prototype.loadMetadata = function(
             }
             else
             {
-
                 File.findByUri(childNode.resource, function (err, file) {
                     if (isNull(err) && !isNull(file))
                     {
@@ -1007,7 +1007,7 @@ Folder.prototype.loadMetadata = function(
             }
         }
 
-        Descriptor.mergeDescriptors(descriptors, function(err, oldDescriptors)
+        Descriptor.mergeDescriptors(descriptors, function(err, descriptorsInBackup)
         {
             if(!isNull(node.children) && node.children instanceof Array)
             {
@@ -1018,7 +1018,7 @@ Folder.prototype.loadMetadata = function(
                     {
                         if(isNull(err))
                         {
-                            self.replaceDescriptors(oldDescriptors, excludedDescriptorTypes, exceptionedDescriptorTypes);
+                            self.replaceDescriptors(descriptorsInBackup, excludedDescriptorTypes, exceptionedDescriptorTypes);
                             self.save(function(err, result){
                                 if(isNull(err))
                                 {
@@ -1109,7 +1109,10 @@ Folder.prototype.loadMetadata = function(
                 }
                 else
                 {
-                    loadMetadataIntoThisFolder(node, callback);
+                    loadMetadataIntoThisFolder(node, function(err, result)
+                    {
+                        callback(err, result);
+                    });
                 }
             }
             else
@@ -1132,14 +1135,15 @@ Folder.prototype.restoreFromFolder = function(absPathOfRootFolder,
                                               runningOnRoot)
 {
     const self = this;
+    let entityLoadingTheMetadataUri;
 
     if(!isNull(entityLoadingTheMetadata) && entityLoadingTheMetadata instanceof User)
     {
-        var entityLoadingTheMetadataUri = entityLoadingTheMetadata.uri;
+        entityLoadingTheMetadataUri = entityLoadingTheMetadata.uri;
     }
     else
     {
-        var entityLoadingTheMetadataUri = User.anonymous.uri;
+        entityLoadingTheMetadataUri = User.anonymous.uri;
     }
 
     self.loadContentsOfFolderIntoThis(absPathOfRootFolder, replaceExistingFolder, function(err, result){
@@ -1209,7 +1213,7 @@ Folder.prototype.setDescriptorsRecursively = function(descriptors, callback, uri
                         node.getLogicalParts(function (err, children) {
                             if (isNull(err) && !isNull(children) && children instanceof Array) {
                                 if (children.length > 0) {
-                                    async.map(children, setDescriptors, function (err, results) {
+                                    async.mapSeries(children, setDescriptors, function (err, results) {
                                         if (isNull(err)) {
                                             /*if(Config.debug.active && Config.debug.files.log_all_restore_operations)
                                         {
@@ -1312,7 +1316,7 @@ Folder.prototype.delete = function(callback, uriOfUserDeletingTheFolder, notRecu
                     child.delete(cb, uriOfUserDeletingTheFolder, notRecursive);
                 };
 
-                async.map(children, deleteChild, function(err, result){
+                async.mapSeries(children, deleteChild, function(err, result){
                     if(isNull(err))
                     {
                         self.deleteAllMyTriples(function(err, result){
@@ -1412,7 +1416,7 @@ Folder.deleteOnLocalFileSystem = function(absPath, callback)
 
     if(isWin)
     {
-        command = `rd /s /q "${absPath}"`
+        command = `rd /s /q "${absPath}"`;
     }
     else
     {
