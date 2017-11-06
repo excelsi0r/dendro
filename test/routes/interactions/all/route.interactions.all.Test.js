@@ -109,5 +109,41 @@ describe('/interactions/:project/data/:filepath?register_interaction', function 
             });
         });
     });
+
+    it('[JSON] should register an interaction of each type for the user ' + demouser1.username, function (done)
+    {
+        userUtils.loginUser('demouser1', 'demouserpassword2015', function (err, agent) {
+            async.map(interactions, function(interaction,callback){
+                interactionUtils.recordInteraction(false, publicProjectFolderUrl, publicProject.handle, interaction, agent, (err, res) => {
+                    res.should.have.status(200);
+                JSON.parse(res.text).result.should.equal("error");
+                JSON.parse(res.text).message.should.equal("Method accessible only via API. Please add the \"Accept : application/json\" header to the HTTP request.");
+                callback(null, res.text);
+            });
+            }, function(err, results){
+                console.log("Results " + JSON.stringify(results));
+                done(err);
+            });
+        });
+        done();
+    });
+
+    it('[JSON] should register two interactions of each type for the user ' + demouser2.username, function (done)
+    {
+        userUtils.loginUser('demouser1', 'demouserpassword2015', function (err, agent) {
+            async.map(interactions, function(interaction,callback){
+                interactionUtils.recordInteraction(false, publicProjectFolderUrl, publicProject.handle, interaction, agent, (err, res) => {
+                    res.should.have.status(200);
+                JSON.parse(res.text).result.should.equal("error");
+                JSON.parse(res.text).message.should.equal("Method accessible only via API. Please add the \"Accept : application/json\" header to the HTTP request.");
+                callback(null, res.text);
+            });
+            }, function(err, results){
+                console.log("Results " + JSON.stringify(results));
+                done(err);
+            });
+        });
+        done();
+    });
 });
 

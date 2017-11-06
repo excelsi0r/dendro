@@ -57,17 +57,5 @@ describe('/interactions/:project/data/:filepath?register_interaction', function 
             });
         });
     });
-
-    it('[JSON] should register an interaction of each type for the user ' + demouser1.username, function (done)
-    {
-        //TODO
-        done();
-    });
-
-    it('[JSON] should register two interactions of each type for the user ' + demouser2.username, function (done)
-    {
-        //TODO
-        done();
-    });
 });
 
