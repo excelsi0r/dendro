@@ -44,7 +44,7 @@ describe('/interactions/:project/data/:filepath?register_interaction', function 
                     res.should.have.status(404);
                 JSON.parse(res.text).result.should.equal("error");
                 JSON.parse(res.text).message.should.equal("Method accessible only via API. Please add the \"Accept : application/json\" header to the HTTP request.");
-                callback(null, res.text);
+                done();
             });
             }, function(err, results){
                 console.log("Results " + JSON.stringify(results));
