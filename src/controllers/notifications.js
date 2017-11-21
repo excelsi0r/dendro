@@ -7,7 +7,7 @@ const Config = require(Pathfinder.absPathInSrcFolder("models/meta/config.js")).C
 
 const isNull = require(Pathfinder.absPathInSrcFolder("/utils/null.js")).isNull;
 
-const Notification = require('../models/notifications/notification.js').Notification;
+const Notification = require("../models/notifications/notification.js").Notification;
 const Elements = require(Pathfinder.absPathInSrcFolder("/models/meta/elements.js")).Elements;
 const DbConnection = require("../kb/db.js").DbConnection;
 
@@ -15,14 +15,15 @@ const db = Config.getDBByID();
 
 const db_notifications = Config.getDBByID("notifications");
 
-const app = require('../app');
+const app = require("../app");
 
-//Get user notifications for a specific user, ordered by date
-exports.get_unread_user_notifications = function (req ,res) {
-    const acceptsHTML = req.accepts('html');
-    const acceptsJSON = req.accepts('json');
+// Get user notifications for a specific user, ordered by date
+exports.get_unread_user_notifications = function (req, res)
+{
+    const acceptsHTML = req.accepts("html");
+    const acceptsJSON = req.accepts("json");
 
-    if(acceptsJSON && !acceptsHTML)  //will be null if the client does not accept html
+    if (acceptsJSON && !acceptsHTML) // will be null if the client does not accept html
     {
         const userUri = req.user.uri;
 
@@ -80,19 +81,20 @@ exports.get_unread_user_notifications = function (req ,res) {
     else
     {
         const msg = "This method is only accessible via HTML. Accept:\"text/html\" header is missing or is not the only Accept type";
-        req.flash('error', "Invalid Request");
+        req.flash("error", "Invalid Request");
         res.status(400).json({
-            result : "Error",
-            message : msg
+            result: "Error",
+            message: msg
         });
     }
 };
 
-exports.get_notification_info = function (req, res) {
-    const acceptsHTML = req.accepts('html');
-    const acceptsJSON = req.accepts('json');
+exports.get_notification_info = function (req, res)
+{
+    const acceptsHTML = req.accepts("html");
+    const acceptsJSON = req.accepts("json");
 
-    if(acceptsJSON && !acceptsHTML)  //will be null if the client does not accept html
+    if (acceptsJSON && !acceptsHTML) // will be null if the client does not accept html
     {
         const userUri = req.user.uri;
         const notificationUri = req.query.notificationUri;
@@ -133,7 +135,9 @@ exports.get_notification_info = function (req, res) {
                     if (isNull(err))
                     {
                         if (notification.length > 0)
+                        {
                             res.json(notification);
+                        }
                         else
                         {
                             const errorMsg = "Invalid notification uri";
@@ -165,29 +169,30 @@ exports.get_notification_info = function (req, res) {
     else
     {
         const msg = "This method is only accessible via HTML. Accept:\"text/html\" header is missing or is not the only Accept type";
-        req.flash('error', "Invalid Request");
+        req.flash("error", "Invalid Request");
         res.status(400).json({
-            result : "Error",
-            message : msg
+            result: "Error",
+            message: msg
         });
     }
 };
 
-//Deletes a user's notification
-exports.delete = function (req, res) {
-    const acceptsHTML = req.accepts('html');
-    const acceptsJSON = req.accepts('json');
+// Deletes a user's notification
+exports.delete = function (req, res)
+{
+    const acceptsHTML = req.accepts("html");
+    const acceptsJSON = req.accepts("json");
 
-    if(acceptsJSON && !acceptsHTML)  //will be null if the client does not accept html
+    if (acceptsJSON && !acceptsHTML) // will be null if the client does not accept html
     {
         const userUri = req.user.uri;
         const notificationUri = req.query.notificationUri;
 
-        if(!isNull(userUri) && !isNull(notificationUri))
+        if (!isNull(userUri) && !isNull(notificationUri))
         {
             let query =
                 "WITH [0] \n" +
-                "DELETE { [1] ?p ?v} \n"+
+                "DELETE { [1] ?p ?v} \n" +
                 "WHERE { \n" +
                 "[1] ?p ?v. \n" +
                 "[1] ddr:resourceAuthorUri [2]. \n" +
@@ -198,11 +203,11 @@ exports.delete = function (req, res) {
             db.connection.executeViaJDBC(query,
                 DbConnection.pushLimitsArguments([
                     {
-                        type : Elements.types.resourceNoEscape,
+                        type: Elements.types.resourceNoEscape,
                         value: db_notifications.graphUri
                     },
                     {
-                        type : Elements.types.resourceNoEscape,
+                        type: Elements.types.resourceNoEscape,
                         value: notificationUri
                     },
                     {
@@ -210,18 +215,19 @@ exports.delete = function (req, res) {
                         value: userUri
                     }
                 ]),
-                function(err, result) {
-                    if(isNull(err))
+                function (err, result)
+                {
+                    if (isNull(err))
                     {
-                        Notification.exists(req.query.notificationUri, function(err, exists){
-                            if(isNull(err))
+                        Notification.exists(req.query.notificationUri, function (err, exists)
+                        {
+                            if (isNull(err))
                             {
-                                if(!isNull(exists) && !exists)
+                                if (!isNull(exists) && !exists)
                                 {
-
                                     res.json({
-                                        result : "OK",
-                                        message : "Notification successfully deleted"
+                                        result: "OK",
+                                        message: "Notification successfully deleted"
                                     });
                                 }
                                 else
@@ -265,13 +271,10 @@ exports.delete = function (req, res) {
     else
     {
         const msg = "This method is only accessible via HTML. Accept:\"text/html\" header is missing or is not the only Accept type";
-        req.flash('error', "Invalid Request");
+        req.flash("error", "Invalid Request");
         res.status(400).json({
-            result : "Error",
-            message : msg
+            result: "Error",
+            message: msg
         });
     }
 };
-
-
-

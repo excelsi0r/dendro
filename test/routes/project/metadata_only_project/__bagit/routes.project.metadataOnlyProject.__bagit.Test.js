@@ -26,46 +26,56 @@ const invalidProject = require(Pathfinder.absPathInTestsFolder("mockdata/project
 
 const createFilesUnit = appUtils.requireUncached(Pathfinder.absPathInTestsFolder("units/files/createFiles.Unit.js"));
 
-describe("Backup Metadata Only project", function () {
+describe("Backup Metadata Only project", function ()
+{
     this.timeout(Config.testsTimeout);
-    before(function (done) {
-        createFilesUnit.setup(function (err, results) {
+    before(function (done)
+    {
+        createFilesUnit.setup(function (err, results)
+        {
             should.equal(err, null);
             done();
         });
     });
 
-    describe("[METADATA ONLY PROJECT] [Invalid Cases] /project/" + project.handle + "?bagit", function() {
-
-        it("Should give an error message when a project does not exist", function (done) {
+    describe("[METADATA ONLY PROJECT] [Invalid Cases] /project/" + project.handle + "?bagit", function ()
+    {
+        it("Should give an error message when a project does not exist", function (done)
+        {
             this.timeout(Config.testsTimeout);
-            userUtils.loginUser(demouser1.username, demouser1.password, function (err, agent) {
+            userUtils.loginUser(demouser1.username, demouser1.password, function (err, agent)
+            {
                 should.equal(err, null);
-                projectUtils.bagit(agent, invalidProject.handle, function (err, res) {
+                projectUtils.bagit(agent, invalidProject.handle, function (err, res)
+                {
                     res.statusCode.should.equal(404);
                     done();
                 });
             });
         });
 
-        it("Should give an error when the user is not authenticated", function (done) {
+        it("Should give an error when the user is not authenticated", function (done)
+        {
             this.timeout(Config.testsTimeout);
             const app = global.tests.app;
             const agent = chai.request.agent(app);
 
-            projectUtils.bagit(agent, project.handle, function (err, res) {
+            projectUtils.bagit(agent, project.handle, function (err, res)
+            {
                 should.not.equal(err, null);
                 res.statusCode.should.equal(401);
                 done();
             });
-
         });
 
-        it("Should give an error when the user is authenticated, but not as a creator nor contributor of the project", function (done) {
+        it("Should give an error when the user is authenticated, but not as a creator nor contributor of the project", function (done)
+        {
             this.timeout(Config.testsTimeout);
-            userUtils.loginUser(demouser3.username, demouser3.password, function (err, agent) {
+            userUtils.loginUser(demouser3.username, demouser3.password, function (err, agent)
+            {
                 should.equal(err, null);
-                projectUtils.bagit(agent, project.handle, function (err, res) {
+                projectUtils.bagit(agent, project.handle, function (err, res)
+                {
                     res.statusCode.should.equal(401);
                     done();
                 });
@@ -73,17 +83,22 @@ describe("Backup Metadata Only project", function () {
         });
     });
 
-    describe("[METADATA ONLY PROJECT] [Valid Cases] /project/" + project.handle + "?bagit", function() {
-        it("Should backup the private project correctly", function (done) {
+    describe("[METADATA ONLY PROJECT] [Valid Cases] /project/" + project.handle + "?bagit", function ()
+    {
+        it("Should backup the private project correctly", function (done)
+        {
             this.timeout(Config.testsTimeout);
             userUtils.loginUser(demouser1.username, demouser1.password, function (err, agent)
             {
-                projectUtils.bagit(agent, project.handle, function (err, res) {
+                projectUtils.bagit(agent, project.handle, function (err, res)
+                {
                     should.equal(err, null);
                     res.statusCode.should.equal(200);
-                    projectUtils.contentsMatchBackup(project, res.body, function(err, result){
+                    projectUtils.contentsMatchBackup(project, res.body, function (err, result)
+                    {
                         should.equal(err, null);
-                        projectUtils.metadataMatchesBackup(project, res.body, function(err, result){
+                        projectUtils.metadataMatchesBackup(project, res.body, function (err, result)
+                        {
                             should.equal(err, null);
                             done();
                         });
@@ -93,10 +108,12 @@ describe("Backup Metadata Only project", function () {
         });
     });
 
-     after(function (done) {
-        //destroy graphs
+    after(function (done)
+    {
+        // destroy graphs
 
-        appUtils.clearAppState(function (err, data) {
+        appUtils.clearAppState(function (err, data)
+        {
             should.equal(err, null);
             done(err);
         });

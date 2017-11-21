@@ -25,10 +25,13 @@ const createFilesUnit = appUtils.requireUncached(Pathfinder.absPathInTestsFolder
 
 const allFiles = createFilesUnit.filesData;
 
-describe("Private project testFolder1 ?rename", function () {
-    before(function (done) {
+describe("Private project testFolder1 ?rename", function ()
+{
+    before(function (done)
+    {
         this.timeout(Config.testsTimeout);
-        createFilesUnit.setup(function (err, results) {
+        createFilesUnit.setup(function (err, results)
+        {
             should.equal(err, null);
             done();
         });
@@ -110,24 +113,33 @@ describe("Private project testFolder1 ?rename", function () {
         });
     });
 
-    describe("[POST] [FILE] [PRIVATE PROJECT] [Valid Cases] /project/" + privateProject.handle + "/data/testFolder1/:filename?rename", function () {
-        it("Should rename files with success if the user is logged in as demouser1(the creator of the project)", function (done) {
-            userUtils.loginUser(demouser1.username, demouser1.password, function (err, agent) {
-                async.mapSeries(allFiles, function(file, callback){
+    describe("[POST] [FILE] [PRIVATE PROJECT] [Valid Cases] /project/" + privateProject.handle + "/data/testFolder1/:filename?rename", function ()
+    {
+        it("Should rename files with success if the user is logged in as demouser1(the creator of the project)", function (done)
+        {
+            userUtils.loginUser(demouser1.username, demouser1.password, function (err, agent)
+            {
+                async.mapSeries(allFiles, function (file, callback)
+                {
                     const newName = "RenamedFile";
-                    fileUtils.renameFile(agent, privateProject.handle, testFolder1.name, file.name, newName,  function (err, res) {
+                    fileUtils.renameFile(agent, privateProject.handle, testFolder1.name, file.name, newName, function (err, res)
+                    {
                         res.statusCode.should.equal(200);
                         callback(err, res);
                     });
-                }, function(err, result){
+                }, function (err, result)
+                {
                     done(err);
                 });
             });
         });
 
-        it("Should rename files with success if the user is logged in as demouser2(a collaborator of the project)", function (done) {
-            userUtils.loginUser(demouser2.username, demouser2.password, function (err, agent) {
-                itemUtils.createFolder(true, agent, privateProject.handle, testFolder1.name, folderForDemouser2.name, function (err, res) {
+        it("Should rename files with success if the user is logged in as demouser2(a collaborator of the project)", function (done)
+        {
+            userUtils.loginUser(demouser2.username, demouser2.password, function (err, agent)
+            {
+                itemUtils.createFolder(true, agent, privateProject.handle, testFolder1.name, folderForDemouser2.name, function (err, res)
+                {
                     res.statusCode.should.equal(200);
                     done();
                 });
@@ -135,10 +147,12 @@ describe("Private project testFolder1 ?rename", function () {
         });
     });
 
-    after(function (done) {
-        //destroy graphs
+    after(function (done)
+    {
+        // destroy graphs
 
-        appUtils.clearAppState(function (err, data) {
+        appUtils.clearAppState(function (err, data)
+        {
             should.equal(err, null);
             done(err);
         });

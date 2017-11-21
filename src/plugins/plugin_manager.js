@@ -10,17 +10,17 @@ function PluginManager ()
 {
 }
 
-PluginManager.registerPlugins = function(app, callback)
+PluginManager.registerPlugins = function (app, callback)
 {
     const pluginsFolderAbsPath = Pathfinder.getAbsolutePathToPluginsFolder();
 
-    const isHiddenFile = function(fileName)
+    const isHiddenFile = function (fileName)
     {
-        for(let i = 0; i < Config.systemOrHiddenFilesRegexes.length; i++)
+        for (let i = 0; i < Config.systemOrHiddenFilesRegexes.length; i++)
         {
             let regex = new RegExp(Config.systemOrHiddenFilesRegexes[i]);
 
-            if(fileName.match(regex))
+            if (fileName.match(regex))
             {
                 return true;
             }
@@ -33,17 +33,17 @@ PluginManager.registerPlugins = function(app, callback)
 
     files = _.without(files, "conf");
 
-    for(let i = 0; i < files.length; i++)
+    for (let i = 0; i < files.length; i++)
     {
         let fileName = files[i];
 
-        if(!isHiddenFile(fileName))
+        if (!isHiddenFile(fileName))
         {
             const pluginAbsolutePath = path.join(pluginsFolderAbsPath, fileName);
 
             let stats = fs.statSync(pluginAbsolutePath);
 
-            if(stats.isDirectory())
+            if (stats.isDirectory())
             {
                 let configFileLocation = pluginAbsolutePath + "/integration/config.json";
                 let PluginConfig = require(configFileLocation);

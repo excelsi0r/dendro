@@ -26,36 +26,46 @@ const invalidProject = require(Pathfinder.absPathInTestsFolder("mockdata/project
 
 const createFilesUnit = appUtils.requireUncached(Pathfinder.absPathInTestsFolder("units/files/createFiles.Unit.js"));
 
-describe("Backup Public project", function () {
-    before(function (done) {
+describe("Backup Public project", function ()
+{
+    before(function (done)
+    {
         this.timeout(Config.testsTimeout);
-        createFilesUnit.setup(function (err, results) {
+        createFilesUnit.setup(function (err, results)
+        {
             should.equal(err, null);
             done();
         });
     });
 
-    describe("[PUBLIC PROJECT] [Invalid Cases] /project/" + project.handle + "?bagit", function() {
-
-        it("Should give an error message when a project does not exist", function (done) {
+    describe("[PUBLIC PROJECT] [Invalid Cases] /project/" + project.handle + "?bagit", function ()
+    {
+        it("Should give an error message when a project does not exist", function (done)
+        {
             this.timeout(Config.testsTimeout);
-            userUtils.loginUser(demouser1.username, demouser1.password, function (err, agent) {
+            userUtils.loginUser(demouser1.username, demouser1.password, function (err, agent)
+            {
                 should.equal(err, null);
-                projectUtils.bagit(agent, invalidProject.handle, function (err, res) {
+                projectUtils.bagit(agent, invalidProject.handle, function (err, res)
+                {
                     res.statusCode.should.equal(404);
                     done();
                 });
             });
         });
 
-        it("Should NOT give an error when the user is not authenticated and produce a proper backup, because the project is public", function (done) {
+        it("Should NOT give an error when the user is not authenticated and produce a proper backup, because the project is public", function (done)
+        {
             this.timeout(Config.testsTimeout);
-            projectUtils.bagit(agent, project.handle, function (err, res) {
+            projectUtils.bagit(agent, project.handle, function (err, res)
+            {
                 should.equal(err, null);
                 res.statusCode.should.equal(200);
-                projectUtils.contentsMatchBackup(project, res.body, function(err, result){
+                projectUtils.contentsMatchBackup(project, res.body, function (err, result)
+                {
                     should.equal(err, null);
-                    projectUtils.metadataMatchesBackup(project, res.body, function(err, result){
+                    projectUtils.metadataMatchesBackup(project, res.body, function (err, result)
+                    {
                         should.equal(err, null);
                         done();
                     });
@@ -63,16 +73,20 @@ describe("Backup Public project", function () {
             });
         });
 
-        it("Should NOT give an error and produce a proper backup when the user is authenticated, even though not as a creator nor contributor of the project, because the project is public", function (done) {
+        it("Should NOT give an error and produce a proper backup when the user is authenticated, even though not as a creator nor contributor of the project, because the project is public", function (done)
+        {
             this.timeout(Config.testsTimeout);
             userUtils.loginUser(demouser3.username, demouser3.password, function (err, agent)
             {
-                projectUtils.bagit(agent, project.handle, function (err, res) {
+                projectUtils.bagit(agent, project.handle, function (err, res)
+                {
                     should.equal(err, null);
                     res.statusCode.should.equal(200);
-                    projectUtils.contentsMatchBackup(project, res.body, function(err, result){
+                    projectUtils.contentsMatchBackup(project, res.body, function (err, result)
+                    {
                         should.equal(err, null);
-                        projectUtils.metadataMatchesBackup(project, res.body, function(err, result){
+                        projectUtils.metadataMatchesBackup(project, res.body, function (err, result)
+                        {
                             should.equal(err, null);
                             done();
                         });
@@ -82,17 +96,22 @@ describe("Backup Public project", function () {
         });
     });
 
-    describe("[PUBLIC PROJECT] [Valid Cases] /project/" + project.handle + "?bagit", function() {
-        it("Should backup the private project correctly", function (done) {
+    describe("[PUBLIC PROJECT] [Valid Cases] /project/" + project.handle + "?bagit", function ()
+    {
+        it("Should backup the private project correctly", function (done)
+        {
             this.timeout(Config.testsTimeout);
             userUtils.loginUser(demouser1.username, demouser1.password, function (err, agent)
             {
-                projectUtils.bagit(agent, project.handle, function (err, res) {
+                projectUtils.bagit(agent, project.handle, function (err, res)
+                {
                     should.equal(err, null);
                     res.statusCode.should.equal(200);
-                    projectUtils.contentsMatchBackup(project, res.body, function(err, result){
+                    projectUtils.contentsMatchBackup(project, res.body, function (err, result)
+                    {
                         should.equal(err, null);
-                        projectUtils.metadataMatchesBackup(project, res.body, function(err, result){
+                        projectUtils.metadataMatchesBackup(project, res.body, function (err, result)
+                        {
                             should.equal(err, null);
                             done();
                         });
@@ -102,10 +121,12 @@ describe("Backup Public project", function () {
         });
     });
 
-     after(function (done) {
-        //destroy graphs
+    after(function (done)
+    {
+        // destroy graphs
 
-        appUtils.clearAppState(function (err, data) {
+        appUtils.clearAppState(function (err, data)
+        {
             should.equal(err, null);
             done(err);
         });
